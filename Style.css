@@ -1,0 +1,241 @@
+body {
+  margin: 0;
+  padding: 0;
+  background-color: rgb(237, 237, 237);
+}
+
+/* Top container layout */
+.top-container {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  background-color: rgb(237, 237, 237);
+  padding: 16px 40px;
+
+}
+.top-box {
+  margin-left: 16px;
+  flex: 0 0 auto;
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.top-container--with-back {
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.top-container--with-back .top-back {
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+
+.back-button {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: none;
+  background: #0d6efd;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 3px 8px rgba(13, 110, 253, 0.25);
+}
+
+.back-button:hover {
+  background: #0b5ed7;
+}
+
+/* Logo */
+.top-box img[alt="Logo"] {
+  width: 140px;
+  height: auto;
+  display: block;
+  margin-left: 110px;
+} 
+
+/* Profile icon in dropdown (person.png) */
+.dropdown .btn-custom img {
+  width: 25px;
+  height: 25px;
+  display: inline-block;
+  margin: 0;
+  object-fit: contain;
+}
+
+/* Cart icon (cart.png) */
+.top-box img[alt="cart"] {
+  width: 28px;
+  height: 28px;
+  display: inline-block;
+  margin: 0;
+  object-fit: contain;
+}
+
+
+
+/* Cards layout */
+.mid-container {
+  display: flex;
+  justify-content: center;
+  gap: 30px;          /* mellomrom mellom kort */
+  margin: 50px 0;     /* avstand over/under */
+  flex-wrap: wrap;    /* gjør at de hopper ned hvis skjermen er liten */
+  
+}
+
+.mid-container .card {
+  display: flex;
+  flex-direction: column;
+}
+
+.mid-container .card .card-body {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.mid-container .card .card-body .btn {
+  margin-top: auto;
+  align-self: center;
+}
+
+/* Footer */
+.footer-container {
+  display: flex;
+  justify-content: center;
+  gap: 100px;
+  background-color: lightgray;
+  padding: 20px;
+}
+    .dropdown .btn-custom {
+      background-color: rgb(237, 237, 237); /* your color */
+      color: white;
+      border: none;
+    }
+
+    .dropdown .btn-custom:hover {
+      background-color: rgb(237, 237, 237); /* slightly darker on hover */
+    }
+
+    /* 2. Remove the Bootstrap arrow */
+    .dropdown-toggle::after {
+      display: none !important;
+    }
+
+    /* 3. Show menu on hover */
+    .dropdown:hover .dropdown-menu {
+      display: block;
+      margin-top: 0;
+    }
+
+/* Tweak position of the profile dropdown so it doesn't go off-screen on the right */
+#profileDropdown.dropdown-menu {
+  /* shift slightly to the left */
+  transform: translateX(-40px) !important;
+  /* ensure it anchors to the right side */
+  right: 0 !important;
+  left: auto !important;
+}
+
+.python-page {
+  background: #f4f6f9;
+  color: #1f2a44;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.python-page .page-shell {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 60px 20px 40px;
+}
+
+.python-page h1 {
+  margin-bottom: 0.5rem;
+}
+
+.python-page .lead {
+  margin-bottom: 2rem;
+  font-size: 1.05rem;
+  color: #455a76;
+}
+
+.python-page pre {
+  background: #0b1623;
+  color: #e9f5ff;
+  padding: 24px;
+  border-radius: 16px;
+  overflow-x: auto;
+  line-height: 1.5;
+  border: 1px solid #132339;
+  box-shadow: 0 18px 45px rgba(8, 24, 48, 0.35);
+}
+
+.python-page code {
+  font-family: "Fira Code", Consolas, "Courier New", monospace;
+  font-size: 0.95rem;
+}
+
+.melding-page {
+  background: #f8fafc;
+  color: #1f2a44;
+  font-family: "Segoe UI", Arial, sans-serif;
+}
+
+.melding-page main {
+  padding-bottom: 40px;
+}
+
+.melding-page .card-elev {
+  border: 1px solid #e9ecef;
+  border-radius: 1rem;
+}
+
+.melding-page .muted {
+  color: #6c757d;
+}
+
+.melding-page #name[readonly] {
+  background: #e9ecef;
+  color: #495057;
+  cursor: not-allowed;
+}
+
+.iframe-page {
+  background: #f4f6f9;
+  color: #1f2a44;
+  font-family: "Segoe UI", Arial, sans-serif;
+  min-height: 100vh;
+}
+
+.iframe-shell {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 48px 20px 60px;
+}
+
+.iframe-wrapper {
+  position: relative;
+  width: 100%;
+  padding-top: 62.5%;
+  border-radius: 18px;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid rgba(15, 32, 63, 0.08);
+}
+
+.iframe-wrapper iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #ffffff;
+}
+
+.iframe-note {
+  color: #455a76;
+  font-size: 0.95rem;
+}
