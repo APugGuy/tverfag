@@ -5,8 +5,8 @@
     const supa = window.supabase || null;
     if (!supa) return; // supabase will be available below when client is created
     const client = supa.createClient(
-      "https://ivlertpelhlmrkelimik.supabase.co",
-      "sb_publishable_dzv1-BSpefObyTjVEWEjgw_Ua8Q8jNq"
+      "https://hyrtpoywvdvghasiewei.supabase.co",
+      "sb_publishable_kneblDkCAHqgGFqgntXgEw_9cc8INOj"
     );
     const { data } = await client.auth.getUser();
     const user = data?.user ?? null;
@@ -23,8 +23,8 @@
 })();
 
 // --- CONFIG (already set by you) ---
-const SUPABASE_URL = "https://ivlertpelhlmrkelimik.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_dzv1-BSpefObyTjVEWEjgw_Ua8Q8jNq";
+const SUPABASE_URL = "https://hyrtpoywvdvghasiewei.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_kneblDkCAHqgGFqgntXgEw_9cc8INOj";
 
 // --- create client correctly from the CDN global ---
 // create client from global
@@ -39,6 +39,20 @@ const loginMessage = document.getElementById("loginMessage");
 const loginBtn = document.getElementById("loginBtn");
 const signupBtn = document.getElementById("signupBtn");
 const logoutBtn = document.getElementById("logoutBtn");
+const roleHint = document.getElementById("roleHint");
+const studentPanel = document.getElementById("studentPanel");
+const teacherPanel = document.getElementById("teacherPanel");
+const assignmentsList = document.getElementById("assignmentsList");
+const assignmentSelect = document.getElementById("assignmentSelect");
+const answerText = document.getElementById("answerText");
+const answerForm = document.getElementById("answerForm");
+const answerFeedback = document.getElementById("answerFeedback");
+const answersList = document.getElementById("answersList");
+const submitAnswerBtn = document.getElementById("submitAnswerBtn");
+
+let currentUser = null;
+let currentRole = null;
+let currentAssignments = [];
 
 // Bootstrap modal instance (so we can hide it programmatically)
 const loginModalEl = document.getElementById("loginModal");
@@ -68,6 +82,297 @@ function isEmailVerified(user) {
   if (!user) return false;
   // Supabase user objects usually have email_confirmed_at when verified
   return !!(user.email_confirmed_at || user.confirmed_at);
+}
+
+function setRoleHint(message, type = "info") {
+  if (!roleHint) return;
+  if (!message) {
+    roleHint.classList.add("d-none");
+    roleHint.textContent = "";
+    return;
+  }
+  roleHint.textContent = message;
+  roleHint.className = `alert alert-${type}`;
+}
+
+function togglePanel(panel, show) {
+  if (!panel) return;
+  panel.classList.toggle("d-none", !show);
+}
+
+function resetStudentUI() {
+  togglePanel(studentPanel, false);
+  if (assignmentsList) assignmentsList.innerHTML = "";
+  if (assignmentSelect) {
+    assignmentSelect.innerHTML = "";
+    assignmentSelect.disabled = true;
+  }
+  if (answerText) answerText.value = "";
+  if (answerFeedback) {
+    answerFeedback.textContent = "";
+    answerFeedback.classList.remove("text-danger", "text-success");
+  }
+}
+
+function resetTeacherUI() {
+  togglePanel(teacherPanel, false);
+  if (answersList) answersList.innerHTML = "";
+}
+
+async function fetchUserRole(userId) {
+  if (!userId) return null;
+  try {
+    const { data, error } = await supabaseClient
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .maybeSingle();
+    if (error) {
+      console.error("fetchUserRole error", error);
+      return null;
+    }
+    return data?.role ?? null;
+  } catch (err) {
+    console.error("fetchUserRole unexpected", err);
+    return null;
+  }
+}
+
+async function refreshRoleViews(user) {
+  currentUser = user || null;
+  currentRole = null;
+
+  if (!user) {
+    setRoleHint("Logg inn for å se oppgaver og besvarelser.");
+    resetStudentUI();
+    resetTeacherUI();
+    return;
+  }
+
+  setRoleHint("Henter rolle...", "info");
+  const role = await fetchUserRole(user.id);
+  currentRole = role;
+
+  if (!role) {
+    setRoleHint(
+      "Fant ingen rolle på profilen din. Be en lærer/administrator oppdatere deg i Supabase.",
+      "warning"
+    );
+    resetStudentUI();
+    resetTeacherUI();
+    return;
+  }
+
+  if (role === "elev") {
+    setRoleHint("Du er logget inn som elev.", "primary");
+    resetTeacherUI();
+    togglePanel(studentPanel, true);
+    await loadAssignments();
+  } else if (role === "lærer" || role === "admin") {
+    setRoleHint("Du er logget inn som lærer/administrator.", "secondary");
+    resetStudentUI();
+    togglePanel(teacherPanel, true);
+    await loadAnswers();
+  } else {
+    setRoleHint(`Du er logget inn med rollen "${role}". Ingen paneler tilgjengelig.`, "info");
+    resetStudentUI();
+    resetTeacherUI();
+  }
+}
+
+async function loadAssignments() {
+  if (!assignmentsList || !assignmentSelect) return;
+  assignmentsList.innerHTML = '<div class="text-muted">Laster oppgaver...</div>';
+  assignmentSelect.disabled = true;
+  assignmentSelect.innerHTML = '';
+  currentAssignments = [];
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("oppgaver")
+      .select("id, tittel, beskrivelse, created_at")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("loadAssignments error", error);
+      assignmentsList.innerHTML = `<div class="text-danger">${error.message}</div>`;
+      return;
+    }
+    currentAssignments = data || [];
+    renderAssignments();
+  } catch (err) {
+    console.error("loadAssignments unexpected", err);
+    assignmentsList.innerHTML = `<div class="text-danger">Kunne ikke hente oppgaver.</div>`;
+  }
+}
+
+function renderAssignments() {
+  if (!assignmentsList || !assignmentSelect) return;
+  if (!currentAssignments.length) {
+    assignmentsList.innerHTML = '<div class="alert alert-info mb-0">Ingen oppgaver er lagt ut ennå.</div>';
+    assignmentSelect.disabled = true;
+    assignmentSelect.innerHTML = '<option value="">Ingen oppgaver tilgjengelig</option>';
+    return;
+  }
+
+  assignmentsList.innerHTML = currentAssignments
+    .map(
+      (task) => `
+        <article class="border rounded p-3 mb-2">
+          <div class="d-flex justify-content-between align-items-center">
+            <h6 class="mb-0">${task.tittel}</h6>
+            <small class="text-muted">${task.created_at ? new Date(task.created_at).toLocaleDateString() : ""}</small>
+          </div>
+          <p class="mb-0 text-muted">${task.beskrivelse || "Ingen beskrivelse."}</p>
+        </article>
+      `
+    )
+    .join("");
+
+  assignmentSelect.disabled = false;
+  assignmentSelect.innerHTML = `
+    <option value="">Velg oppgave</option>
+    ${currentAssignments.map((task) => `<option value="${task.id}">${task.tittel}</option>`).join("")}
+  `;
+}
+
+async function loadAnswers() {
+  if (!answersList) return;
+  answersList.innerHTML = '<div class="text-muted">Laster besvarelser...</div>';
+
+  try {
+    const { data, error } = await supabaseClient
+      .from("besvarelser")
+      .select("id, oppgave_id, elev_id, svar, created_at")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("loadAnswers error", error);
+      answersList.innerHTML = `<div class="text-danger">${error.message}</div>`;
+      return;
+    }
+
+    const answers = data || [];
+    const oppgaveIds = [...new Set(answers.map((ans) => ans.oppgave_id))].filter(Boolean);
+    const oppgaveMap = new Map();
+
+    if (oppgaveIds.length) {
+      const { data: oppgaverData, error: oppgaveError } = await supabaseClient
+        .from("oppgaver")
+        .select("id, tittel")
+        .in("id", oppgaveIds);
+      if (!oppgaveError && oppgaverData) {
+        oppgaverData.forEach((oppgave) => oppgaveMap.set(oppgave.id, oppgave.tittel));
+      }
+    }
+
+    renderAnswersTable(answers, oppgaveMap);
+  } catch (err) {
+    console.error("loadAnswers unexpected", err);
+    answersList.innerHTML = `<div class="text-danger">Kunne ikke hente besvarelser.</div>`;
+  }
+}
+
+function renderAnswersTable(answers, oppgaveMap) {
+  if (!answersList) return;
+  if (!answers.length) {
+    answersList.innerHTML = '<div class="alert alert-info mb-0">Ingen besvarelser sendt inn ennå.</div>';
+    return;
+  }
+
+  const rows = answers
+    .map((ans) => {
+      const oppgaveNavn = oppgaveMap.get(ans.oppgave_id) || ans.oppgave_id;
+      const timestamp = ans.created_at ? new Date(ans.created_at).toLocaleString() : "-";
+      return `
+        <tr>
+          <td>${oppgaveNavn}</td>
+          <td><code>${ans.elev_id}</code></td>
+          <td>${ans.svar}</td>
+          <td>${timestamp}</td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  answersList.innerHTML = `
+    <table class="table table-striped align-middle">
+      <thead>
+        <tr>
+          <th>Oppgave</th>
+          <th>Elev-ID</th>
+          <th>Svar</th>
+          <th>Tidspunkt</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+if (answerForm) {
+  answerForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (answerFeedback) {
+      answerFeedback.textContent = "";
+      answerFeedback.classList.remove("text-danger", "text-success");
+    }
+    answerForm.classList.add("was-validated");
+
+    const oppgaveId = assignmentSelect?.value;
+    const answerValue = answerText?.value?.trim();
+
+    if (!oppgaveId || !answerValue) {
+      return;
+    }
+
+    if (!currentUser) {
+      if (answerFeedback) {
+        answerFeedback.textContent = "Du må være innlogget for å sende inn.";
+        answerFeedback.classList.add("text-danger");
+      }
+      return;
+    }
+
+    if (submitAnswerBtn) submitAnswerBtn.disabled = true;
+    try {
+      const { error } = await supabaseClient.from("besvarelser").insert({
+        oppgave_id: oppgaveId,
+        elev_id: currentUser.id,
+        svar: answerValue,
+      });
+
+      if (error) {
+        console.error("submit answer error", error);
+        if (answerFeedback) {
+          answerFeedback.textContent = error.message;
+          answerFeedback.classList.remove("text-success");
+          answerFeedback.classList.add("text-danger");
+        }
+        return;
+      }
+
+      if (answerText) answerText.value = "";
+      answerForm.classList.remove("was-validated");
+      if (answerFeedback) {
+        answerFeedback.textContent = "Svar sendt!";
+        answerFeedback.classList.remove("text-danger");
+        answerFeedback.classList.add("text-success");
+      }
+      await loadAssignments();
+      if (currentRole === "lærer" || currentRole === "admin") {
+        await loadAnswers();
+      }
+    } catch (err) {
+      console.error("submit answer unexpected", err);
+      if (answerFeedback) {
+        answerFeedback.textContent = "Kunne ikke sende svaret ditt.";
+        answerFeedback.classList.remove("text-success");
+        answerFeedback.classList.add("text-danger");
+      }
+    } finally {
+      if (submitAnswerBtn) submitAnswerBtn.disabled = false;
+    }
+  });
 }
 
 // --- Update UI based on user state ---
@@ -150,6 +455,7 @@ async function initAuth() {
         /* ignore */
       }
       updateUIFromUser(null);
+      await refreshRoleViews(null);
       return;
     }
     // Enforce verification: treat unverified as logged out.
@@ -160,10 +466,12 @@ async function initAuth() {
         /* ignore */
       }
       updateUIFromUser(null);
+      await refreshRoleViews(null);
       showMessage("E-post må bekreftes før innlogging. Sjekk innboksen for verifiseringslenke.");
       return;
     }
     updateUIFromUser(user);
+    await refreshRoleViews(user);
 
     // If guard requested login, open login modal
     if (window.__requireLogin) {
@@ -187,6 +495,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
   console.log("Auth event:", event, session);
   const user = session?.user ?? null;
   updateUIFromUser(user);
+  refreshRoleViews(user);
 
   // Close modal on successful sign in
   if (["SIGNED_IN", "USER_UPDATED"].includes(event) && bootstrapModal) {
@@ -383,6 +692,7 @@ logoutBtn.onclick = async () => {
       return;
     }
     updateUIFromUser(null);
+    await refreshRoleViews(null);
     showMessage("Du er logget ut.", "success");
   } catch (err) {
     console.error("logout error:", err);

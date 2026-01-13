@@ -83,6 +83,42 @@
       </div>
     </div>
 
+    <!-- Role based content -->
+    <main class="container py-4" id="rolePanels">
+      <div id="roleHint" class="alert alert-info d-none"></div>
+
+      <section id="studentPanel" class="card shadow-sm d-none">
+        <div class="card-body">
+          <h5 class="card-title">Oppgaver</h5>
+          <p class="text-muted mb-3">Tilgjengelige oppgaver vises under. Send inn svaret ditt direkte her.</p>
+          <div id="assignmentsList" class="mb-3"></div>
+
+          <form id="answerForm" class="needs-validation" novalidate>
+            <div class="mb-2">
+              <label class="form-label" for="assignmentSelect">Velg oppgave</label>
+              <select id="assignmentSelect" class="form-select" required></select>
+              <div class="invalid-feedback">Velg en oppgave før du sender inn.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="answerText">Svar</label>
+              <textarea id="answerText" class="form-control" rows="4" required placeholder="Skriv svaret ditt her..."></textarea>
+              <div class="invalid-feedback">Svaret kan ikke være tomt.</div>
+            </div>
+            <button id="submitAnswerBtn" class="btn btn-primary">Send inn svar</button>
+            <div id="answerFeedback" class="form-text mt-2"></div>
+          </form>
+        </div>
+      </section>
+
+      <section id="teacherPanel" class="card shadow-sm d-none">
+        <div class="card-body">
+          <h5 class="card-title">Besvarelser fra elever</h5>
+          <p class="text-muted">Kun lærere og administratorer kan se denne oversikten.</p>
+          <div id="answersList" class="table-responsive"></div>
+        </div>
+      </section>
+    </main>
+
 
 
 
