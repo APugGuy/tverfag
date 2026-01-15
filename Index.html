@@ -100,9 +100,9 @@
               <div class="invalid-feedback">Velg en oppgave før du sender inn.</div>
             </div>
             <div class="mb-3">
-              <label class="form-label" for="answerText">Svar</label>
-              <textarea id="answerText" class="form-control" rows="4" required placeholder="Skriv svaret ditt her..."></textarea>
-              <div class="invalid-feedback">Svaret kan ikke være tomt.</div>
+              <label class="form-label">Alternativer</label>
+              <div id="answerOptions" class="list-group"></div>
+              <div class="form-text">Velg ett alternativ før du sender inn.</div>
             </div>
             <button id="submitAnswerBtn" class="btn btn-primary">Send inn svar</button>
             <div id="answerFeedback" class="form-text mt-2"></div>
@@ -114,7 +114,61 @@
         <div class="card-body">
           <h5 class="card-title">Besvarelser fra elever</h5>
           <p class="text-muted">Kun lærere og administratorer kan se denne oversikten.</p>
-          <div id="answersList" class="table-responsive"></div>
+
+          <form id="createTaskForm" class="border rounded p-3 mb-4 bg-light">
+            <h6 class="mb-3">Lag ny flervalgsoppgave</h6>
+            <div class="mb-2">
+              <label class="form-label" for="taskTitle">Tittel / tema</label>
+              <input id="taskTitle" class="form-control" required />
+            </div>
+            <div class="mb-2">
+              <label class="form-label" for="taskPrompt">Spørsmålstekst</label>
+              <textarea id="taskPrompt" class="form-control" rows="3" required></textarea>
+            </div>
+            <div class="row g-3 mb-2" id="taskOptions">
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 1</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="0" required />
+                  </span>
+                  <input class="form-control task-option" data-index="0" required />
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 2</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="1" />
+                  </span>
+                  <input class="form-control task-option" data-index="1" required />
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 3 (valgfri)</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="2" />
+                  </span>
+                  <input class="form-control task-option" data-index="2" />
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 4 (valgfri)</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="3" />
+                  </span>
+                  <input class="form-control task-option" data-index="3" />
+                </div>
+              </div>
+            </div>
+            <p class="small text-muted">Klikk på sirkelen foran et alternativ for å markere hvilket svar som er riktig.</p>
+            <button type="submit" class="btn btn-success">Publiser oppgave</button>
+            <div id="taskCreateFeedback" class="form-text mt-2"></div>
+          </form>
+
+          <div id="answersList" class="accordion" ></div>
         </div>
       </section>
     </main>

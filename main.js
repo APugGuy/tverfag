@@ -44,15 +44,27 @@ const studentPanel = document.getElementById("studentPanel");
 const teacherPanel = document.getElementById("teacherPanel");
 const assignmentsList = document.getElementById("assignmentsList");
 const assignmentSelect = document.getElementById("assignmentSelect");
-const answerText = document.getElementById("answerText");
+const answerOptions = document.getElementById("answerOptions");
 const answerForm = document.getElementById("answerForm");
 const answerFeedback = document.getElementById("answerFeedback");
 const answersList = document.getElementById("answersList");
 const submitAnswerBtn = document.getElementById("submitAnswerBtn");
+const createTaskForm = document.getElementById("createTaskForm");
+const taskTitleInput = document.getElementById("taskTitle");
+const taskPromptInput = document.getElementById("taskPrompt");
+const taskOptionInputs = Array.prototype.slice.call(document.querySelectorAll(".task-option"));
+const correctOptionInputs = Array.prototype.slice.call(document.querySelectorAll(".correct-option"));
+const taskCreateFeedback = document.getElementById("taskCreateFeedback");
+
+if (correctOptionInputs.length && !correctOptionInputs.some((input) => input.checked)) {
+  correctOptionInputs[0].checked = true;
+}
 
 let currentUser = null;
 let currentRole = null;
 let currentAssignments = [];
+let answeredAssignmentIds = new Set();
+let roleSwitchBusy = false;
 
 // Bootstrap modal instance (so we can hide it programmatically)
 const loginModalEl = document.getElementById("loginModal");
@@ -100,23 +112,209 @@ function togglePanel(panel, show) {
   panel.classList.toggle("d-none", !show);
 }
 
+function escapeHtml(value) {
+  if (typeof value !== "string") return "";
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function resetStudentUI() {
   togglePanel(studentPanel, false);
+  answeredAssignmentIds = new Set();
   if (assignmentsList) assignmentsList.innerHTML = "";
   if (assignmentSelect) {
-    assignmentSelect.innerHTML = "";
+    assignmentSelect.innerHTML = "<option value=\"\">Ingen oppgaver tilgjengelig</option>";
     assignmentSelect.disabled = true;
+    assignmentSelect.value = "";
   }
-  if (answerText) answerText.value = "";
+  if (answerOptions) answerOptions.innerHTML = '<div class="text-muted">Ingen oppgaver valgt.</div>';
   if (answerFeedback) {
     answerFeedback.textContent = "";
     answerFeedback.classList.remove("text-danger", "text-success");
   }
+  if (submitAnswerBtn) submitAnswerBtn.disabled = true;
+  if (answerForm) answerForm.classList.remove("was-validated");
 }
 
 function resetTeacherUI() {
   togglePanel(teacherPanel, false);
   if (answersList) answersList.innerHTML = "";
+}
+
+function parseTaskContent(task) {
+  if (!task) return { prompt: "", options: [], correctOption: null };
+  if (task._parsedContent) return task._parsedContent;
+
+  let prompt = typeof task.beskrivelse === "string" ? task.beskrivelse : "";
+  let options = [];
+  let correctOption = null;
+  const raw = task.beskrivelse;
+
+  if (raw && typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === "object") {
+        if (parsed.prompt || parsed.question) {
+          prompt = parsed.prompt || parsed.question;
+        }
+        if (Array.isArray(parsed.options)) {
+          options = parsed.options
+            .map((opt) => {
+              if (typeof opt === "string") {
+                return { text: opt, correct: false };
+              }
+              if (opt && typeof opt === "object") {
+                const textValue = opt.text || opt.value || "";
+                if (!textValue) return null;
+                return { text: textValue, correct: !!opt.correct };
+              }
+              return null;
+            })
+            .filter((opt) => !!opt && !!opt.text);
+        }
+        if (parsed.correctOption && options.length) {
+          const match = options.find((opt) => opt.text === parsed.correctOption);
+          if (match) match.correct = true;
+        }
+      }
+    } catch (err) {
+      // keep fallback prompt / options
+    }
+  }
+
+  if (!Array.isArray(options) || !options.length) {
+    options = [];
+  }
+  const flagged = options.find((opt) => opt.correct);
+  if (flagged) {
+    correctOption = flagged.text;
+  }
+
+  task._parsedContent = { prompt: prompt || "", options, correctOption };
+  return task._parsedContent;
+}
+
+function renderAnswerOptions(taskId) {
+  if (!answerOptions) return;
+  answerOptions.innerHTML = "";
+  if (!taskId) {
+    answerOptions.innerHTML = '<div class="text-muted">Velg en oppgave for å se alternativer.</div>';
+    return;
+  }
+  const normalizedId = String(taskId);
+  const task = currentAssignments.find((t) => String(t.id) === normalizedId);
+  if (!task) {
+    answerOptions.innerHTML = '<div class="text-muted">Fant ikke alternativene for denne oppgaven.</div>';
+    return;
+  }
+  const content = parseTaskContent(task);
+  if (!content.options.length) {
+    answerOptions.innerHTML = '<div class="text-muted">Denne oppgaven har ingen alternativer – kontakt lærer.</div>';
+    return;
+  }
+
+  const optionItems = content.options
+    .map((opt, index) => {
+      const optionId = `answerOption-${task.id}-${index}`;
+      return `
+        <label class="list-group-item list-group-item-action">
+          <input class="form-check-input me-2" type="radio" name="answerOption" value="${escapeHtml(opt.text)}" id="${optionId}">
+          ${escapeHtml(opt.text)}
+        </label>
+      `;
+    })
+    .join("");
+  answerOptions.innerHTML = optionItems;
+}
+
+function setTaskCreateFeedback(message, type) {
+  if (!taskCreateFeedback) return;
+  taskCreateFeedback.textContent = message;
+  taskCreateFeedback.classList.remove("text-danger", "text-success");
+  if (type === "success") {
+    taskCreateFeedback.classList.add("text-success");
+  } else if (type === "danger") {
+    taskCreateFeedback.classList.add("text-danger");
+  }
+}
+
+function setRoleSwitchFeedback(message, type) {
+  const el = document.getElementById("roleSwitchFeedback");
+  if (!el) return;
+  el.textContent = message || "";
+  el.classList.remove("text-danger", "text-success", "text-muted");
+  if (type === "success") {
+    el.classList.add("text-success");
+  } else if (type === "danger") {
+    el.classList.add("text-danger");
+  } else if (type === "muted") {
+    el.classList.add("text-muted");
+  }
+}
+
+function syncRoleSwitchUI() {
+  const roleBadge = document.getElementById("profileRoleLabel");
+  if (roleBadge) {
+    const badgeText = currentRole || (currentUser ? "Henter rolle..." : "Ikke logget inn");
+    roleBadge.textContent = badgeText;
+  }
+  const roleSelect = document.getElementById("roleSwitchSelect");
+  if (roleSelect) {
+    const valueToSet = currentRole || "";
+    if (roleSelect.value !== valueToSet) {
+      roleSelect.value = valueToSet;
+    }
+  }
+}
+
+async function handleRoleSwitchChange(newRole) {
+  const allowedRoles = ["elev", "lærer", "admin"];
+  if (!newRole || allowedRoles.indexOf(newRole) === -1 || roleSwitchBusy) {
+    syncRoleSwitchUI();
+    return;
+  }
+  if (!currentUser) {
+    setRoleSwitchFeedback("Du må være innlogget for å endre rolle.", "danger");
+    syncRoleSwitchUI();
+    return;
+  }
+  if (newRole === currentRole) {
+    setRoleSwitchFeedback("Du har allerede denne rollen.", "muted");
+    return;
+  }
+
+  const previousRole = currentRole;
+  roleSwitchBusy = true;
+  const roleSelect = document.getElementById("roleSwitchSelect");
+  if (roleSelect) roleSelect.disabled = true;
+  setRoleSwitchFeedback("Oppdaterer rolle...", "muted");
+
+  try {
+    const { error } = await supabaseClient
+      .from("profiles")
+      .update({ role: newRole })
+      .eq("id", currentUser.id);
+    if (error) {
+      console.error("handleRoleSwitchChange error", error);
+      setRoleSwitchFeedback(error.message || "Kunne ikke endre rolle.", "danger");
+      if (roleSelect) roleSelect.value = previousRole || "";
+      return;
+    }
+    await refreshRoleViews(currentUser);
+    setRoleSwitchFeedback("Rolle oppdatert.", "success");
+  } catch (err) {
+    console.error("handleRoleSwitchChange unexpected", err);
+    setRoleSwitchFeedback("Uventet feil ved endring av rolle.", "danger");
+    if (roleSelect) roleSelect.value = previousRole || "";
+  } finally {
+    if (roleSelect) roleSelect.disabled = false;
+    roleSwitchBusy = false;
+    syncRoleSwitchUI();
+  }
 }
 
 async function fetchUserRole(userId) {
@@ -141,6 +339,8 @@ async function fetchUserRole(userId) {
 async function refreshRoleViews(user) {
   currentUser = user || null;
   currentRole = null;
+  syncRoleSwitchUI();
+  setRoleSwitchFeedback("", null);
 
   if (!user) {
     setRoleHint("Logg inn for å se oppgaver og besvarelser.");
@@ -152,6 +352,7 @@ async function refreshRoleViews(user) {
   setRoleHint("Henter rolle...", "info");
   const role = await fetchUserRole(user.id);
   currentRole = role;
+  syncRoleSwitchUI();
 
   if (!role) {
     setRoleHint(
@@ -186,8 +387,25 @@ async function loadAssignments() {
   assignmentSelect.disabled = true;
   assignmentSelect.innerHTML = '';
   currentAssignments = [];
+  answeredAssignmentIds = new Set();
 
   try {
+    if (currentRole === "elev" && currentUser) {
+      const { data: answeredData, error: answeredError } = await supabaseClient
+        .from("besvarelser")
+        .select("oppgave_id")
+        .eq("elev_id", currentUser.id);
+      if (answeredError) {
+        console.error("loadAssignments answeredError", answeredError);
+      } else if (Array.isArray(answeredData)) {
+        answeredData.forEach((row) => {
+          if (row && row.oppgave_id !== null && row.oppgave_id !== undefined) {
+            answeredAssignmentIds.add(String(row.oppgave_id));
+          }
+        });
+      }
+    }
+
     const { data, error } = await supabaseClient
       .from("oppgaver")
       .select("id, tittel, beskrivelse, created_at")
@@ -197,7 +415,11 @@ async function loadAssignments() {
       assignmentsList.innerHTML = `<div class="text-danger">${error.message}</div>`;
       return;
     }
-    currentAssignments = data || [];
+    let assignments = data || [];
+    if (currentRole === "elev" && answeredAssignmentIds.size) {
+      assignments = assignments.filter((task) => !answeredAssignmentIds.has(String(task.id)));
+    }
+    currentAssignments = assignments;
     renderAssignments();
   } catch (err) {
     console.error("loadAssignments unexpected", err);
@@ -208,31 +430,54 @@ async function loadAssignments() {
 function renderAssignments() {
   if (!assignmentsList || !assignmentSelect) return;
   if (!currentAssignments.length) {
-    assignmentsList.innerHTML = '<div class="alert alert-info mb-0">Ingen oppgaver er lagt ut ennå.</div>';
+    const completedAll = currentRole === "elev" && answeredAssignmentIds && answeredAssignmentIds.size;
+    assignmentsList.innerHTML = completedAll
+      ? '<div class="alert alert-success mb-0">Du har svart på alle tilgjengelige oppgaver.</div>'
+      : '<div class="alert alert-info mb-0">Ingen oppgaver er lagt ut ennå.</div>';
     assignmentSelect.disabled = true;
     assignmentSelect.innerHTML = '<option value="">Ingen oppgaver tilgjengelig</option>';
+    assignmentSelect.value = "";
+    if (submitAnswerBtn) submitAnswerBtn.disabled = true;
+    renderAnswerOptions(null);
     return;
   }
 
   assignmentsList.innerHTML = currentAssignments
     .map(
-      (task) => `
+      (task) => {
+        const content = parseTaskContent(task);
+        const promptText = content.prompt || task.beskrivelse || "Ingen beskrivelse.";
+        const safeTitle = escapeHtml(task.tittel || "Untitled");
+        const safePrompt = escapeHtml(promptText);
+        const createdAt = task.created_at ? new Date(task.created_at).toLocaleDateString() : "";
+        return `
         <article class="border rounded p-3 mb-2">
           <div class="d-flex justify-content-between align-items-center">
-            <h6 class="mb-0">${task.tittel}</h6>
-            <small class="text-muted">${task.created_at ? new Date(task.created_at).toLocaleDateString() : ""}</small>
+            <h6 class="mb-0">${safeTitle}</h6>
+            <small class="text-muted">${createdAt}</small>
           </div>
-          <p class="mb-0 text-muted">${task.beskrivelse || "Ingen beskrivelse."}</p>
+          <p class="mb-0 text-muted">${safePrompt}</p>
         </article>
-      `
+      `;
+      }
     )
     .join("");
 
   assignmentSelect.disabled = false;
   assignmentSelect.innerHTML = `
     <option value="">Velg oppgave</option>
-    ${currentAssignments.map((task) => `<option value="${task.id}">${task.tittel}</option>`).join("")}
+    ${currentAssignments.map((task) => `<option value="${task.id}">${escapeHtml(task.tittel || "Oppgave")}</option>`).join("")}
   `;
+  assignmentSelect.value = "";
+  if (submitAnswerBtn) submitAnswerBtn.disabled = false;
+  renderAnswerOptions(assignmentSelect.value || null);
+}
+
+if (assignmentSelect) {
+  assignmentSelect.addEventListener("change", () => {
+    const selectedId = assignmentSelect.value || null;
+    renderAnswerOptions(selectedId);
+  });
 }
 
 async function loadAnswers() {
@@ -253,7 +498,9 @@ async function loadAnswers() {
 
     const answers = data || [];
     const oppgaveIds = [...new Set(answers.map((ans) => ans.oppgave_id))].filter(Boolean);
+    const studentIds = [...new Set(answers.map((ans) => ans.elev_id))].filter(Boolean);
     const oppgaveMap = new Map();
+    const studentMap = new Map();
 
     if (oppgaveIds.length) {
       const { data: oppgaverData, error: oppgaveError } = await supabaseClient
@@ -265,14 +512,27 @@ async function loadAnswers() {
       }
     }
 
-    renderAnswersTable(answers, oppgaveMap);
+    if (studentIds.length) {
+      const { data: profilesData, error: profilesError } = await supabaseClient
+        .from("profiles")
+        .select("id, full_name, nickname")
+        .in("id", studentIds);
+      if (!profilesError && profilesData) {
+        profilesData.forEach((profile) => {
+          const displayName = profile.full_name || profile.nickname || profile.id;
+          studentMap.set(profile.id, displayName);
+        });
+      }
+    }
+
+    renderAnswersTable(answers, oppgaveMap, studentMap);
   } catch (err) {
     console.error("loadAnswers unexpected", err);
     answersList.innerHTML = `<div class="text-danger">Kunne ikke hente besvarelser.</div>`;
   }
 }
 
-function renderAnswersTable(answers, oppgaveMap) {
+function renderAnswersTable(answers, oppgaveMap, studentMap) {
   if (!answersList) return;
   if (!answers.length) {
     answersList.innerHTML = '<div class="alert alert-info mb-0">Ingen besvarelser sendt inn ennå.</div>';
@@ -282,12 +542,13 @@ function renderAnswersTable(answers, oppgaveMap) {
   const rows = answers
     .map((ans) => {
       const oppgaveNavn = oppgaveMap.get(ans.oppgave_id) || ans.oppgave_id;
+      const elevNavn = studentMap.get(ans.elev_id) || ans.elev_id;
       const timestamp = ans.created_at ? new Date(ans.created_at).toLocaleString() : "-";
       return `
         <tr>
-          <td>${oppgaveNavn}</td>
-          <td><code>${ans.elev_id}</code></td>
-          <td>${ans.svar}</td>
+          <td>${escapeHtml(String(oppgaveNavn))}</td>
+          <td>${escapeHtml(String(elevNavn))}</td>
+          <td>${escapeHtml(String(ans.svar || ""))}</td>
           <td>${timestamp}</td>
         </tr>
       `;
@@ -299,7 +560,7 @@ function renderAnswersTable(answers, oppgaveMap) {
       <thead>
         <tr>
           <th>Oppgave</th>
-          <th>Elev-ID</th>
+          <th>Elev</th>
           <th>Svar</th>
           <th>Tidspunkt</th>
         </tr>
@@ -319,9 +580,20 @@ if (answerForm) {
     answerForm.classList.add("was-validated");
 
     const oppgaveId = assignmentSelect ? assignmentSelect.value : "";
-    const answerValue = answerText && typeof answerText.value === "string" ? answerText.value.trim() : "";
+    const normalizedOppgaveId = oppgaveId ? String(oppgaveId) : "";
+    let answerValue = "";
+    if (answerOptions) {
+      const selectedOption = answerOptions.querySelector('input[name="answerOption"]:checked');
+      if (selectedOption && typeof selectedOption.value === "string") {
+        answerValue = selectedOption.value.trim();
+      }
+    }
 
     if (!oppgaveId || !answerValue) {
+      if (answerFeedback && !answerValue) {
+        answerFeedback.textContent = "Velg et alternativ før du sender inn.";
+        answerFeedback.classList.add("text-danger");
+      }
       return;
     }
 
@@ -333,8 +605,35 @@ if (answerForm) {
       return;
     }
 
+    if (answeredAssignmentIds && answeredAssignmentIds.has(normalizedOppgaveId)) {
+      if (answerFeedback) {
+        answerFeedback.textContent = "Du har allerede svart på denne oppgaven.";
+        answerFeedback.classList.add("text-success");
+      }
+      await loadAssignments();
+      return;
+    }
+
     if (submitAnswerBtn) submitAnswerBtn.disabled = true;
     try {
+      const { data: existingRows, error: existingError } = await supabaseClient
+        .from("besvarelser")
+        .select("id")
+        .eq("oppgave_id", oppgaveId)
+        .eq("elev_id", currentUser.id)
+        .limit(1);
+      if (existingError) {
+        console.error("check existing answers error", existingError);
+      } else if (existingRows && existingRows.length) {
+        if (answerFeedback) {
+          answerFeedback.textContent = "Du har allerede sendt inn et svar for denne oppgaven.";
+          answerFeedback.classList.add("text-success");
+        }
+        answeredAssignmentIds.add(normalizedOppgaveId);
+        await loadAssignments();
+        return;
+      }
+
       const { error } = await supabaseClient.from("besvarelser").insert({
         oppgave_id: oppgaveId,
         elev_id: currentUser.id,
@@ -351,7 +650,8 @@ if (answerForm) {
         return;
       }
 
-      if (answerText) answerText.value = "";
+      answeredAssignmentIds.add(normalizedOppgaveId);
+      renderAnswerOptions(null);
       answerForm.classList.remove("was-validated");
       if (answerFeedback) {
         answerFeedback.textContent = "Svar sendt!";
@@ -371,6 +671,87 @@ if (answerForm) {
       }
     } finally {
       if (submitAnswerBtn) submitAnswerBtn.disabled = false;
+    }
+  });
+}
+
+if (createTaskForm) {
+  createTaskForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    createTaskForm.classList.add("was-validated");
+    setTaskCreateFeedback("", null);
+
+    const title = taskTitleInput && typeof taskTitleInput.value === "string" ? taskTitleInput.value.trim() : "";
+    const prompt = taskPromptInput && typeof taskPromptInput.value === "string" ? taskPromptInput.value.trim() : "";
+    const optionItems = taskOptionInputs
+      .map((input) => {
+        if (!input) return null;
+        const value = typeof input.value === "string" ? input.value.trim() : "";
+        const index = parseInt(input.getAttribute("data-index"), 10);
+        return { text: value, index: isNaN(index) ? null : index };
+      })
+      .filter((item) => item && item.text.length);
+
+    if (!title || !prompt) {
+      setTaskCreateFeedback("Fyll inn tittel og spørsmål for å publisere.", "danger");
+      return;
+    }
+    if (optionItems.length < 2) {
+      setTaskCreateFeedback("Legg inn minst to alternativer.", "danger");
+      return;
+    }
+
+    const selectedCorrect = document.querySelector('input[name="correctOption"]:checked');
+    if (!selectedCorrect) {
+      setTaskCreateFeedback("Velg hvilket alternativ som er riktig.", "danger");
+      return;
+    }
+    const correctIndex = parseInt(selectedCorrect.value, 10);
+    const correctOption = optionItems.find((opt) => opt.index === correctIndex);
+    if (!correctOption) {
+      setTaskCreateFeedback("Riktig svar må være et av de utfylte alternativene.", "danger");
+      return;
+    }
+
+    const serializedOptions = optionItems.map((opt) => ({
+      text: opt.text,
+      correct: opt.index === correctIndex,
+    }));
+
+    const submitBtn = createTaskForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.disabled = true;
+
+    try {
+      const payload = {
+        tittel: title,
+        beskrivelse: JSON.stringify({ prompt, options: serializedOptions, correctOption: correctOption.text }),
+      };
+      const { error } = await supabaseClient.from("oppgaver").insert(payload);
+      if (error) {
+        console.error("create task error", error);
+        setTaskCreateFeedback(error.message || "Kunne ikke lagre oppgaven.", "danger");
+        return;
+      }
+
+      createTaskForm.reset();
+      correctOptionInputs.forEach((input, index) => {
+        if (index === 0) {
+          input.checked = true;
+        } else {
+          input.checked = false;
+        }
+      });
+      createTaskForm.classList.remove("was-validated");
+      setTaskCreateFeedback("Oppgave publisert!", "success");
+      await loadAssignments();
+      if (currentRole === "lærer" || currentRole === "admin") {
+        await loadAnswers();
+      }
+    } catch (err) {
+      console.error("create task unexpected", err);
+      setTaskCreateFeedback("Kunne ikke publisere oppgaven.", "danger");
+    } finally {
+      if (submitBtn) submitBtn.disabled = false;
     }
   });
 }
@@ -398,6 +779,20 @@ async function updateUIFromUser(user) {
           <div class="px-2">
             <div class="fw-semibold">${user.email}</div>
             <div class="small text-muted">Logget inn</div>
+            <div class="mt-2">
+              <span class="badge bg-secondary" id="profileRoleLabel">${currentRole || "Henter rolle..."}</span>
+            </div>
+          </div>
+          <div class="dropdown-divider"></div>
+          <div class="px-2">
+            <label class="form-label small mb-1" for="roleSwitchSelect">Bytt rolle</label>
+            <select id="roleSwitchSelect" class="form-select form-select-sm">
+              <option value="">Velg rolle</option>
+              <option value="elev">Elev</option>
+              <option value="lærer">Lærer</option>
+              <option value="admin">Admin</option>
+            </select>
+            <div class="form-text" id="roleSwitchFeedback"></div>
           </div>
           <div class="dropdown-divider"></div>
           <div class="px-2">
@@ -420,6 +815,13 @@ async function updateUIFromUser(user) {
         dLogout.onclick = async () => {
           await supabaseClient.auth.signOut();
         };
+      const roleSelect = document.getElementById("roleSwitchSelect");
+      if (roleSelect) {
+        roleSelect.addEventListener("change", (evt) => {
+          handleRoleSwitchChange(evt.target.value);
+        });
+      }
+      syncRoleSwitchUI();
     } else {
       profileDropdown.innerHTML = `
           <div class="small text-muted px-2">Du er ikke logget inn</div>
