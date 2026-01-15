@@ -9,7 +9,7 @@
       "sb_publishable_kneblDkCAHqgGFqgntXgEw_9cc8INOj"
     );
     const { data } = await client.auth.getUser();
-    const user = data?.user ?? null;
+    const user = data && data.user ? data.user : null;
     const verified = !!(user && (user.email_confirmed_at || user.confirmed_at));
     if (!verified) {
       // Redirect to index with login modal prompt (stays on same page since this is index)
@@ -131,7 +131,7 @@ async function fetchUserRole(userId) {
       console.error("fetchUserRole error", error);
       return null;
     }
-    return data?.role ?? null;
+    return data ? data.role : null;
   } catch (err) {
     console.error("fetchUserRole unexpected", err);
     return null;
@@ -318,8 +318,8 @@ if (answerForm) {
     }
     answerForm.classList.add("was-validated");
 
-    const oppgaveId = assignmentSelect?.value;
-    const answerValue = answerText?.value?.trim();
+    const oppgaveId = assignmentSelect ? assignmentSelect.value : "";
+    const answerValue = answerText && typeof answerText.value === "string" ? answerText.value.trim() : "";
 
     if (!oppgaveId || !answerValue) {
       return;
@@ -446,7 +446,7 @@ async function initAuth() {
 
     const { data } = await supabaseClient.auth.getUser();
     // getUser returns { data: { user } } when signed in, else data.user is null
-    const user = data?.user ?? null;
+    const user = data && data.user ? data.user : null;
     // If there's no user on the server, ensure we're signed out locally
     if (!user) {
       try {
@@ -493,7 +493,7 @@ async function initAuth() {
 // Listen for auth state changes (login/logout) and update UI
 supabaseClient.auth.onAuthStateChange((event, session) => {
   console.log("Auth event:", event, session);
-  const user = session?.user ?? null;
+  const user = session && session.user ? session.user : null;
   updateUIFromUser(user);
   refreshRoleViews(user);
 
@@ -515,7 +515,7 @@ supabaseClient.auth.onAuthStateChange((event, session) => {
 async function ensureNickname(user) {
   try {
     if (!user) return;
-    const nick = user.user_metadata?.nickname;
+    const nick = user && user.user_metadata ? user.user_metadata.nickname : undefined;
     if (nick && nick.toString().trim().length > 0) return; // already has nickname
 
     const nickModalEl = document.getElementById("nickModal");
@@ -562,7 +562,7 @@ async function ensureNickname(user) {
       }
       // refresh UI with new user
       const { data: got } = await supabaseClient.auth.getUser();
-      const newUser = got?.user ?? null;
+      const newUser = got && got.user ? got.user : null;
       updateUIFromUser(newUser);
       nickModal.hide();
     }
@@ -576,8 +576,8 @@ async function ensureNickname(user) {
 // --- Button handlers ---
 loginBtn.onclick = async () => {
   clearMessage();
-  const email = emailInput.value?.trim();
-  const password = passwordInput.value ?? "";
+  const email = emailInput && typeof emailInput.value === "string" ? emailInput.value.trim() : "";
+  const password = passwordInput && typeof passwordInput.value === "string" ? passwordInput.value : "";
 
   if (!email || !password) {
     showMessage("Fyll inn både e-post og passord.");
@@ -598,7 +598,7 @@ loginBtn.onclick = async () => {
 
     // Make sure server actually returned a user (in some edge cases the call may succeed without a valid user)
     const got = await supabaseClient.auth.getUser();
-    const user = got?.data?.user ?? null;
+    const user = got && got.data && got.data.user ? got.data.user : null;
     if (!user) {
       // No user — abort and clear any local session
       try {
@@ -629,7 +629,8 @@ loginBtn.onclick = async () => {
     // Store remember-me preference
     const REMEMBER_KEY = "rememberMe";
     try {
-      localStorage.setItem(REMEMBER_KEY, rememberMe?.checked ? "true" : "false");
+      const rememberValue = rememberMe && rememberMe.checked ? "true" : "false";
+      localStorage.setItem(REMEMBER_KEY, rememberValue);
     } catch (e) {
       /* ignore */
     }
@@ -644,8 +645,8 @@ loginBtn.onclick = async () => {
 
 signupBtn.onclick = async () => {
   clearMessage();
-  const email = emailInput.value?.trim();
-  const password = passwordInput.value ?? "";
+  const email = emailInput && typeof emailInput.value === "string" ? emailInput.value.trim() : "";
+  const password = passwordInput && typeof passwordInput.value === "string" ? passwordInput.value : "";
 
   if (!email || !password) {
     showMessage("Fyll inn både e-post og passord for å lage konto.");
