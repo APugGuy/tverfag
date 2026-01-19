@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="style.css" />
+
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+  </head>
+
+  <body>
+    <div class="top-container">
+      <div class="top-title">Informasjons-portalen</div>
+      <!-- Profile dropdown -->
+      <div class="top-box">
+        <div class="dropdown">
+          <button id="profileToggle" class="btn btn-custom dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <img src="pictures/person.png" alt="Profile">
+          </button>
+          <div id="profileDropdown" class="dropdown-menu dropdown-menu-end p-2" style="min-width:200px">
+            <!-- Filled dynamically by JS depending on auth state -->
+            <div class="small text-muted px-2">Du er ikke logget inn</div>
+            <div class="dropdown-divider"></div>
+            <button class="dropdown-item" id="openLoginFromDropdown" type="button" data-bs-toggle="modal" data-bs-target="#loginModal">Logg inn / Lag konto</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal fade" id="loginModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-dark">
+          <div class="modal-header">
+            <h5 class="modal-title">Logg inn</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+
+          <div class="modal-body">
+            <div>
+              <label class="form-label">E-post</label>
+              <input id="email" type="email" class="form-control">
+
+              <label class="form-label mt-3">Passord</label>
+              <input id="password" type="password" class="form-control">
+
+              <div class="form-check mt-2">
+                <input class="form-check-input" type="checkbox" id="rememberMe">
+                <label class="form-check-label" for="rememberMe">Husk meg på denne enheten</label>
+              </div>
+
+              <p id="loginMessage" class="mt-3 text-danger"></p>
+            </div>
+
+            <button id="loginBtn" class="btn btn-primary w-100 mt-3">Logg inn</button>
+            <button id="signupBtn" class="btn btn-secondary w-100 mt-2">Lag konto</button>
+            <button id="logoutBtn" class="btn btn-danger w-100 mt-2 d-none">Logg ut</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Nickname modal (required after first sign-in) -->
+    <div class="modal fade" id="nickModal" tabindex="-1">
+      <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content text-dark">
+          <div class="modal-header">
+            <h5 class="modal-title">Velg kallenavn</h5>
+          </div>
+          <div class="modal-body">
+            <p>Før du kan fortsette må du velge et kallenavn som vises når du sender meldinger.</p>
+            <input id="nickInput" class="form-control" placeholder="Kallenavn (2–30 tegn)">
+            <div id="nickFeedback" class="form-text text-danger mt-2" style="display:none">Skriv et gyldig kallenavn (2–30 tegn).</div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" id="nickSave" class="btn btn-primary">Lagre</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Role based content -->
+    <main class="container py-4" id="rolePanels">
+      <div id="roleHint" class="alert alert-info d-none"></div>
+
+      <section id="studentPanel" class="card shadow-sm d-none">
+        <div class="card-body">
+          <h5 class="card-title">Oppgaver</h5>
+          <p class="text-muted mb-3">Tilgjengelige oppgaver vises under. Send inn svaret ditt direkte her.</p>
+          <div id="assignmentsList" class="mb-3"></div>
+
+          <form id="answerForm" class="needs-validation" novalidate>
+            <div class="mb-2">
+              <label class="form-label" for="assignmentSelect">Velg oppgave</label>
+              <select id="assignmentSelect" class="form-select" required></select>
+              <div class="invalid-feedback">Velg en oppgave før du sender inn.</div>
+            </div>
+            <div class="mb-3">
+              <label class="form-label">Alternativer</label>
+              <div id="answerOptions" class="list-group"></div>
+              <div class="form-text">Velg ett alternativ før du sender inn.</div>
+            </div>
+            <button id="submitAnswerBtn" class="btn btn-primary">Send inn svar</button>
+            <div id="answerFeedback" class="form-text mt-2"></div>
+          </form>
+        </div>
+      </section>
+
+      <section id="teacherPanel" class="card shadow-sm d-none">
+        <div class="card-body">
+          <h5 class="card-title">Besvarelser fra elever</h5>
+          <p class="text-muted">Kun lærere og administratorer kan se denne oversikten.</p>
+
+          <form id="createTaskForm" class="border rounded p-3 mb-4 bg-light">
+            <h6 class="mb-3">Lag ny flervalgsoppgave</h6>
+            <div class="mb-2">
+              <label class="form-label" for="taskTitle">Tittel / tema</label>
+              <input id="taskTitle" class="form-control" required />
+            </div>
+            <div class="mb-2">
+              <label class="form-label" for="taskPrompt">Spørsmålstekst</label>
+              <textarea id="taskPrompt" class="form-control" rows="3" required></textarea>
+            </div>
+            <div class="row g-3 mb-2" id="taskOptions">
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 1</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="0" required />
+                  </span>
+                  <input class="form-control task-option" data-index="0" required />
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 2</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="1" />
+                  </span>
+                  <input class="form-control task-option" data-index="1" required />
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 3 (valgfri)</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="2" />
+                  </span>
+                  <input class="form-control task-option" data-index="2" />
+                </div>
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label">Alternativ 4 (valgfri)</label>
+                <div class="input-group">
+                  <span class="input-group-text" title="Merk som riktig">
+                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="3" />
+                  </span>
+                  <input class="form-control task-option" data-index="3" />
+                </div>
+              </div>
+            </div>
+            <p class="small text-muted">Klikk på sirkelen foran et alternativ for å markere hvilket svar som er riktig.</p>
+            <button type="submit" class="btn btn-success">Publiser oppgave</button>
+            <div id="taskCreateFeedback" class="form-text mt-2"></div>
+          </form>
+
+          <div id="answersList" class="accordion" ></div>
+        </div>
+      </section>
+    </main>
+
+
+
+
+    <!-- Supabase JS -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Bootstrap JS (required for modal and UI) -->
+    <script
+      src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+      integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+      crossorigin="anonymous"></script>
+    <script src="main.js"></script>
+
+    <!-- bootstrap script removed (loaded earlier) -->
+  </body>
+</html>
