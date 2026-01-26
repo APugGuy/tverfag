@@ -9,9 +9,17 @@ body {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  background-color: rgb(237, 237, 237);
+  background-color: #1c375b;
   padding: 16px 40px;
 
+}
+.top-title {
+  margin-right: auto;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 .top-box {
   margin-left: 16px;
@@ -110,13 +118,13 @@ body {
   padding: 20px;
 }
     .dropdown .btn-custom {
-      background-color: rgb(237, 237, 237); /* your color */
+      background-color: #1c375b; /* match top bar */
       color: white;
       border: none;
     }
 
     .dropdown .btn-custom:hover {
-      background-color: rgb(237, 237, 237); /* slightly darker on hover */
+      background-color: #1c375b; /* slightly darker on hover */
     }
 
     /* 2. Remove the Bootstrap arrow */
