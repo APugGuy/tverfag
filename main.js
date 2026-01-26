@@ -242,6 +242,20 @@ function setTaskCreateFeedback(message, type) {
   }
 }
 
+function getDisplayNameFromUser(user) {
+  if (!user) return "";
+  const meta = user.user_metadata || {};
+  const nameCandidates = [
+    meta.display_name,
+    meta.nickname,
+    meta.full_name,
+    meta.name,
+    user.email,
+  ];
+  const match = nameCandidates.find((value) => typeof value === "string" && value.trim().length);
+  return match ? match.trim() : user.id || "";
+}
+
 function setRoleSwitchFeedback(message, type) {
   const el = document.getElementById("roleSwitchFeedback");
   if (!el) return;
@@ -487,7 +501,7 @@ async function loadAnswers() {
   try {
     const { data, error } = await supabaseClient
       .from("besvarelser")
-      .select("id, oppgave_id, elev_id, svar, created_at")
+      .select("id, oppgave_id, elev_id, elev_navn, svar, created_at")
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -542,7 +556,7 @@ function renderAnswersTable(answers, oppgaveMap, studentMap) {
   const rows = answers
     .map((ans) => {
       const oppgaveNavn = oppgaveMap.get(ans.oppgave_id) || ans.oppgave_id;
-      const elevNavn = studentMap.get(ans.elev_id) || ans.elev_id;
+      const elevNavn = studentMap.get(ans.elev_id) || ans.elev_navn || ans.elev_id;
       const timestamp = ans.created_at ? new Date(ans.created_at).toLocaleString() : "-";
       return `
         <tr>
@@ -616,6 +630,7 @@ if (answerForm) {
 
     if (submitAnswerBtn) submitAnswerBtn.disabled = true;
     try {
+      const displayName = getDisplayNameFromUser(currentUser);
       const { data: existingRows, error: existingError } = await supabaseClient
         .from("besvarelser")
         .select("id")
@@ -637,6 +652,7 @@ if (answerForm) {
       const { error } = await supabaseClient.from("besvarelser").insert({
         oppgave_id: oppgaveId,
         elev_id: currentUser.id,
+        elev_navn: displayName,
         svar: answerValue,
       });
 
