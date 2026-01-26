@@ -135,7 +135,7 @@ body {
     /* 3. Show menu on hover */
     .dropdown:hover .dropdown-menu {
       display: block;
-      margin-top: 0;
+      margin-top: -38.5px;
     }
 
 /* Tweak position of the profile dropdown so it doesn't go off-screen on the right */
