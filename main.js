@@ -55,6 +55,7 @@ const taskPromptInput = document.getElementById("taskPrompt");
 const taskOptionInputs = Array.prototype.slice.call(document.querySelectorAll(".task-option"));
 const correctOptionInputs = Array.prototype.slice.call(document.querySelectorAll(".correct-option"));
 const taskCreateFeedback = document.getElementById("taskCreateFeedback");
+const clearAllAnswersBtn = document.getElementById("clearAllAnswersBtn");
 
 if (correctOptionInputs.length && !correctOptionInputs.some((input) => input.checked)) {
   correctOptionInputs[0].checked = true;
@@ -143,6 +144,7 @@ function resetStudentUI() {
 function resetTeacherUI() {
   togglePanel(teacherPanel, false);
   if (answersList) answersList.innerHTML = "";
+  setClearAllButtonState(false);
 }
 
 function parseTaskContent(task) {
@@ -240,6 +242,11 @@ function setTaskCreateFeedback(message, type) {
   } else if (type === "danger") {
     taskCreateFeedback.classList.add("text-danger");
   }
+}
+
+function setClearAllButtonState(enabled) {
+  if (!clearAllAnswersBtn) return;
+  clearAllAnswersBtn.disabled = !enabled;
 }
 
 function getDisplayNameFromUser(user) {
@@ -511,6 +518,7 @@ async function loadAnswers() {
     }
 
     const answers = data || [];
+    setClearAllButtonState(answers.length > 0);
     const oppgaveIds = [...new Set(answers.map((ans) => ans.oppgave_id))].filter(Boolean);
     const studentIds = [...new Set(answers.map((ans) => ans.elev_id))].filter(Boolean);
     const oppgaveMap = new Map();
@@ -542,6 +550,7 @@ async function loadAnswers() {
     renderAnswersTable(answers, oppgaveMap, studentMap);
   } catch (err) {
     console.error("loadAnswers unexpected", err);
+    setClearAllButtonState(false);
     answersList.innerHTML = `<div class="text-danger">Kunne ikke hente besvarelser.</div>`;
   }
 }
@@ -564,6 +573,11 @@ function renderAnswersTable(answers, oppgaveMap, studentMap) {
           <td>${escapeHtml(String(elevNavn))}</td>
           <td>${escapeHtml(String(ans.svar || ""))}</td>
           <td>${timestamp}</td>
+          <td class="text-end">
+            <button type="button" class="btn btn-sm btn-outline-danger delete-answer-btn" data-answer-id="${ans.id}">
+              Slett
+            </button>
+          </td>
         </tr>
       `;
     })
@@ -577,11 +591,53 @@ function renderAnswersTable(answers, oppgaveMap, studentMap) {
           <th>Elev</th>
           <th>Svar</th>
           <th>Tidspunkt</th>
+          <th class="text-end">Handling</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
     </table>
   `;
+}
+
+async function deleteAnswerById(answerId) {
+  if (!answerId) return;
+  const confirmed = window.confirm("Vil du slette denne besvarelsen?");
+  if (!confirmed) return;
+  try {
+    const { error } = await supabaseClient.from("besvarelser").delete().eq("id", answerId);
+    if (error) {
+      console.error("deleteAnswerById error", error);
+      window.alert("Kunne ikke slette besvarelsen.");
+      return;
+    }
+    await loadAnswers();
+  } catch (err) {
+    console.error("deleteAnswerById unexpected", err);
+    window.alert("Uventet feil ved sletting.");
+  }
+}
+
+async function clearAllAnswers() {
+  const confirmed = window.confirm("Dette sletter alle elevlogger. Er du sikker?");
+  if (!confirmed) return;
+  setClearAllButtonState(false);
+  try {
+    const { error } = await supabaseClient
+      .from("besvarelser")
+      .delete()
+      .not("id", "is", null);
+    if (error) {
+      console.error("clearAllAnswers error", error);
+      window.alert("Kunne ikke slette alle besvarelsene.");
+      setClearAllButtonState(true);
+      return;
+    }
+    await loadAnswers();
+  } catch (err) {
+    console.error("clearAllAnswers unexpected", err);
+    window.alert("Uventet feil ved sletting av alle besvarelser.");
+    setClearAllButtonState(true);
+  }
 }
 
 if (answerForm) {
@@ -769,6 +825,23 @@ if (createTaskForm) {
     } finally {
       if (submitBtn) submitBtn.disabled = false;
     }
+  });
+}
+
+if (answersList) {
+  answersList.addEventListener("click", (event) => {
+    const deleteBtn = event.target.closest(".delete-answer-btn");
+    if (!deleteBtn) return;
+    const answerId = deleteBtn.getAttribute("data-answer-id");
+    if (answerId) {
+      deleteAnswerById(answerId);
+    }
+  });
+}
+
+if (clearAllAnswersBtn) {
+  clearAllAnswersBtn.addEventListener("click", () => {
+    clearAllAnswers();
   });
 }
 
