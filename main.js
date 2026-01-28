@@ -25,6 +25,8 @@
 // --- CONFIG (already set by you) ---
 const SUPABASE_URL = "https://hyrtpoywvdvghasiewei.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_kneblDkCAHqgGFqgntXgEw_9cc8INOj";
+const UNSPLASH_ACCESS_KEY = "db8EqDOqXs-ZT_71bk4oujJ4Dx1KW390H3bPc4ZA5lY";
+const UNSPLASH_ENDPOINT = "https://api.unsplash.com/photos/random";
 
 // --- create client correctly from the CDN global ---
 // create client from global
@@ -43,7 +45,6 @@ const roleHint = document.getElementById("roleHint");
 const studentPanel = document.getElementById("studentPanel");
 const teacherPanel = document.getElementById("teacherPanel");
 const assignmentsList = document.getElementById("assignmentsList");
-const assignmentSelect = document.getElementById("assignmentSelect");
 const answerOptions = document.getElementById("answerOptions");
 const answerForm = document.getElementById("answerForm");
 const answerFeedback = document.getElementById("answerFeedback");
@@ -52,10 +53,12 @@ const submitAnswerBtn = document.getElementById("submitAnswerBtn");
 const createTaskForm = document.getElementById("createTaskForm");
 const taskTitleInput = document.getElementById("taskTitle");
 const taskPromptInput = document.getElementById("taskPrompt");
+const taskImageKeywordInput = document.getElementById("taskImageKeyword");
 const taskOptionInputs = Array.prototype.slice.call(document.querySelectorAll(".task-option"));
 const correctOptionInputs = Array.prototype.slice.call(document.querySelectorAll(".correct-option"));
 const taskCreateFeedback = document.getElementById("taskCreateFeedback");
 const clearAllAnswersBtn = document.getElementById("clearAllAnswersBtn");
+const selectedAssignmentLabel = document.getElementById("selectedAssignmentLabel");
 
 if (correctOptionInputs.length && !correctOptionInputs.some((input) => input.checked)) {
   correctOptionInputs[0].checked = true;
@@ -66,6 +69,7 @@ let currentRole = null;
 let currentAssignments = [];
 let answeredAssignmentIds = new Set();
 let roleSwitchBusy = false;
+let selectedAssignmentId = null;
 
 // Bootstrap modal instance (so we can hide it programmatically)
 const loginModalEl = document.getElementById("loginModal");
@@ -123,15 +127,16 @@ function escapeHtml(value) {
     .replace(/'/g, "&#39;");
 }
 
+function sanitizeUrl(url) {
+  if (typeof url !== "string") return "";
+  return url.replace(/"/g, "").replace(/'/g, "");
+}
+
 function resetStudentUI() {
   togglePanel(studentPanel, false);
   answeredAssignmentIds = new Set();
+  selectedAssignmentId = null;
   if (assignmentsList) assignmentsList.innerHTML = "";
-  if (assignmentSelect) {
-    assignmentSelect.innerHTML = "<option value=\"\">Ingen oppgaver tilgjengelig</option>";
-    assignmentSelect.disabled = true;
-    assignmentSelect.value = "";
-  }
   if (answerOptions) answerOptions.innerHTML = '<div class="text-muted">Ingen oppgaver valgt.</div>';
   if (answerFeedback) {
     answerFeedback.textContent = "";
@@ -139,6 +144,7 @@ function resetStudentUI() {
   }
   if (submitAnswerBtn) submitAnswerBtn.disabled = true;
   if (answerForm) answerForm.classList.remove("was-validated");
+  updateSelectedAssignmentLabel();
 }
 
 function resetTeacherUI() {
@@ -148,12 +154,13 @@ function resetTeacherUI() {
 }
 
 function parseTaskContent(task) {
-  if (!task) return { prompt: "", options: [], correctOption: null };
+  if (!task) return { prompt: "", options: [], correctOption: null, imageUrl: "" };
   if (task._parsedContent) return task._parsedContent;
 
   let prompt = typeof task.beskrivelse === "string" ? task.beskrivelse : "";
   let options = [];
   let correctOption = null;
+  let imageUrl = "";
   const raw = task.beskrivelse;
 
   if (raw && typeof raw === "string") {
@@ -182,6 +189,9 @@ function parseTaskContent(task) {
           const match = options.find((opt) => opt.text === parsed.correctOption);
           if (match) match.correct = true;
         }
+        if (parsed.imageUrl || parsed.image) {
+          imageUrl = parsed.imageUrl || parsed.image;
+        }
       }
     } catch (err) {
       // keep fallback prompt / options
@@ -196,7 +206,7 @@ function parseTaskContent(task) {
     correctOption = flagged.text;
   }
 
-  task._parsedContent = { prompt: prompt || "", options, correctOption };
+  task._parsedContent = { prompt: prompt || "", options, correctOption, imageUrl };
   return task._parsedContent;
 }
 
@@ -247,6 +257,24 @@ function setTaskCreateFeedback(message, type) {
 function setClearAllButtonState(enabled) {
   if (!clearAllAnswersBtn) return;
   clearAllAnswersBtn.disabled = !enabled;
+}
+
+function updateSelectedAssignmentLabel() {
+  if (!selectedAssignmentLabel) return;
+  if (!selectedAssignmentId) {
+    selectedAssignmentLabel.textContent = "Ingen oppgave valgt";
+    selectedAssignmentLabel.classList.remove("bg-primary", "text-white");
+    selectedAssignmentLabel.classList.add("bg-light", "text-dark");
+    return;
+  }
+  const task = currentAssignments.find((item) => String(item.id) === String(selectedAssignmentId));
+  if (task) {
+    selectedAssignmentLabel.textContent = `Valgt: ${task.tittel}`;
+  } else {
+    selectedAssignmentLabel.textContent = "Oppgaven finnes ikke lenger";
+  }
+  selectedAssignmentLabel.classList.remove("bg-light", "text-dark");
+  selectedAssignmentLabel.classList.add("bg-primary", "text-white");
 }
 
 function getDisplayNameFromUser(user) {
@@ -338,6 +366,36 @@ async function handleRoleSwitchChange(newRole) {
   }
 }
 
+async function fetchUnsplashImage(keyword) {
+  if (!keyword || !keyword.trim()) return null;
+  try {
+    const queryParams = new URLSearchParams({
+      query: keyword.trim(),
+      orientation: "landscape",
+      content_filter: "high",
+    });
+    const response = await fetch(`${UNSPLASH_ENDPOINT}?${queryParams.toString()}`, {
+      headers: {
+        Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`,
+      },
+    });
+    if (!response.ok) {
+      console.warn("Unsplash request failed", response.status, await response.text());
+      return null;
+    }
+    const data = await response.json();
+    if (data && data.urls && data.urls.regular) {
+      return {
+        url: data.urls.regular,
+        author: data.user && data.user.name ? data.user.name : "Unsplash",
+      };
+    }
+  } catch (err) {
+    console.error("fetchUnsplashImage error", err);
+  }
+  return null;
+}
+
 async function fetchUserRole(userId) {
   if (!userId) return null;
   try {
@@ -403,10 +461,8 @@ async function refreshRoleViews(user) {
 }
 
 async function loadAssignments() {
-  if (!assignmentsList || !assignmentSelect) return;
+  if (!assignmentsList) return;
   assignmentsList.innerHTML = '<div class="text-muted">Laster oppgaver...</div>';
-  assignmentSelect.disabled = true;
-  assignmentSelect.innerHTML = '';
   currentAssignments = [];
   answeredAssignmentIds = new Set();
 
@@ -441,6 +497,9 @@ async function loadAssignments() {
       assignments = assignments.filter((task) => !answeredAssignmentIds.has(String(task.id)));
     }
     currentAssignments = assignments;
+    if (selectedAssignmentId && !currentAssignments.some((task) => String(task.id) === String(selectedAssignmentId))) {
+      selectedAssignmentId = currentAssignments.length ? String(currentAssignments[0].id) : null;
+    }
     renderAssignments();
   } catch (err) {
     console.error("loadAssignments unexpected", err);
@@ -449,55 +508,63 @@ async function loadAssignments() {
 }
 
 function renderAssignments() {
-  if (!assignmentsList || !assignmentSelect) return;
+  if (!assignmentsList) return;
   if (!currentAssignments.length) {
     const completedAll = currentRole === "elev" && answeredAssignmentIds && answeredAssignmentIds.size;
     assignmentsList.innerHTML = completedAll
       ? '<div class="alert alert-success mb-0">Du har svart på alle tilgjengelige oppgaver.</div>'
       : '<div class="alert alert-info mb-0">Ingen oppgaver er lagt ut ennå.</div>';
-    assignmentSelect.disabled = true;
-    assignmentSelect.innerHTML = '<option value="">Ingen oppgaver tilgjengelig</option>';
-    assignmentSelect.value = "";
     if (submitAnswerBtn) submitAnswerBtn.disabled = true;
     renderAnswerOptions(null);
+    selectedAssignmentId = null;
+    updateSelectedAssignmentLabel();
     return;
   }
 
-  assignmentsList.innerHTML = currentAssignments
-    .map(
-      (task) => {
-        const content = parseTaskContent(task);
-        const promptText = content.prompt || task.beskrivelse || "Ingen beskrivelse.";
-        const safeTitle = escapeHtml(task.tittel || "Untitled");
-        const safePrompt = escapeHtml(promptText);
-        const createdAt = task.created_at ? new Date(task.created_at).toLocaleDateString() : "";
-        return `
-        <article class="border rounded p-3 mb-2">
-          <div class="d-flex justify-content-between align-items-center">
-            <h6 class="mb-0">${safeTitle}</h6>
-            <small class="text-muted">${createdAt}</small>
+  const cardsHtml = currentAssignments
+    .map((task) => {
+      const content = parseTaskContent(task);
+      const promptText = content.prompt || task.beskrivelse || "Ingen beskrivelse.";
+      const safeTitle = escapeHtml(task.tittel || "Untitled");
+      const safePrompt = escapeHtml(promptText);
+      const createdAt = task.created_at ? new Date(task.created_at).toLocaleDateString() : "";
+      const imageUrl = content.imageUrl ? sanitizeUrl(content.imageUrl) : "";
+      const hasImage = !!imageUrl;
+      const classes = ["assignment-card", hasImage ? "has-image" : "no-image"];
+      if (String(task.id) === String(selectedAssignmentId)) {
+        classes.push("selected");
+      }
+      const overlay = hasImage ? '<div class="assignment-card__overlay"></div>' : "";
+      const style = hasImage ? `style="background-image:url('${imageUrl}')"` : "";
+      return `
+        <article class="${classes.join(" ")}" data-assignment-id="${task.id}" ${style}>
+          ${overlay}
+          <div class="assignment-card__body">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <h6 class="mb-0">${safeTitle}</h6>
+              <small class="text-muted">${createdAt}</small>
+            </div>
+            <p class="mb-0">${safePrompt}</p>
           </div>
-          <p class="mb-0 text-muted">${safePrompt}</p>
         </article>
       `;
-      }
-    )
+    })
     .join("");
 
-  assignmentSelect.disabled = false;
-  assignmentSelect.innerHTML = `
-    <option value="">Velg oppgave</option>
-    ${currentAssignments.map((task) => `<option value="${task.id}">${escapeHtml(task.tittel || "Oppgave")}</option>`).join("")}
-  `;
-  assignmentSelect.value = "";
-  if (submitAnswerBtn) submitAnswerBtn.disabled = false;
-  renderAnswerOptions(assignmentSelect.value || null);
+  assignmentsList.innerHTML = cardsHtml;
+  if (submitAnswerBtn) submitAnswerBtn.disabled = !selectedAssignmentId;
+  updateSelectedAssignmentLabel();
+  renderAnswerOptions(selectedAssignmentId);
 }
 
-if (assignmentSelect) {
-  assignmentSelect.addEventListener("change", () => {
-    const selectedId = assignmentSelect.value || null;
-    renderAnswerOptions(selectedId);
+if (assignmentsList) {
+  assignmentsList.addEventListener("click", (event) => {
+    const card = event.target.closest(".assignment-card");
+    if (!card) return;
+    const assignmentId = card.getAttribute("data-assignment-id");
+    if (!assignmentId) return;
+    selectedAssignmentId = assignmentId;
+    renderAssignments();
   });
 }
 
@@ -649,7 +716,7 @@ if (answerForm) {
     }
     answerForm.classList.add("was-validated");
 
-    const oppgaveId = assignmentSelect ? assignmentSelect.value : "";
+    const oppgaveId = selectedAssignmentId ? String(selectedAssignmentId) : "";
     const normalizedOppgaveId = oppgaveId ? String(oppgaveId) : "";
     let answerValue = "";
     if (answerOptions) {
@@ -755,6 +822,9 @@ if (createTaskForm) {
 
     const title = taskTitleInput && typeof taskTitleInput.value === "string" ? taskTitleInput.value.trim() : "";
     const prompt = taskPromptInput && typeof taskPromptInput.value === "string" ? taskPromptInput.value.trim() : "";
+    const imageKeyword = taskImageKeywordInput && typeof taskImageKeywordInput.value === "string"
+      ? taskImageKeywordInput.value.trim()
+      : "";
     const optionItems = taskOptionInputs
       .map((input) => {
         if (!input) return null;
@@ -794,9 +864,24 @@ if (createTaskForm) {
     if (submitBtn) submitBtn.disabled = true;
 
     try {
+      let backgroundImage = null;
+      if (imageKeyword) {
+        backgroundImage = await fetchUnsplashImage(imageKeyword);
+      }
+      const payloadContent = {
+        prompt,
+        options: serializedOptions,
+        correctOption: correctOption.text,
+      };
+      if (backgroundImage && backgroundImage.url) {
+        payloadContent.imageUrl = backgroundImage.url;
+        if (backgroundImage.author) payloadContent.imageCredit = backgroundImage.author;
+        payloadContent.imageKeyword = imageKeyword;
+      }
+
       const payload = {
         tittel: title,
-        beskrivelse: JSON.stringify({ prompt, options: serializedOptions, correctOption: correctOption.text }),
+        beskrivelse: JSON.stringify(payloadContent),
       };
       const { error } = await supabaseClient.from("oppgaver").insert(payload);
       if (error) {
@@ -806,6 +891,7 @@ if (createTaskForm) {
       }
 
       createTaskForm.reset();
+      if (taskImageKeywordInput) taskImageKeywordInput.value = "";
       correctOptionInputs.forEach((input, index) => {
         if (index === 0) {
           input.checked = true;

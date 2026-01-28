@@ -96,9 +96,11 @@
 
           <form id="answerForm" class="needs-validation" novalidate>
             <div class="mb-2">
-              <label class="form-label" for="assignmentSelect">Velg oppgave</label>
-              <select id="assignmentSelect" class="form-select" required></select>
-              <div class="invalid-feedback">Velg en oppgave før du sender inn.</div>
+              <label class="form-label">Velg oppgave</label>
+              <div class="assignment-help text-muted" id="assignmentHelp">
+                Klikk på oppgavekortene over for å velge hvilken oppgave du svarer på.
+              </div>
+              <div id="selectedAssignmentLabel" class="badge bg-light text-dark mt-2">Ingen oppgave valgt</div>
             </div>
             <div class="mb-3">
               <label class="form-label">Alternativer</label>
@@ -125,6 +127,11 @@
             <div class="mb-2">
               <label class="form-label" for="taskPrompt">Spørsmålstekst</label>
               <textarea id="taskPrompt" class="form-control" rows="3" required></textarea>
+            </div>
+            <div class="mb-2">
+              <label class="form-label" for="taskImageKeyword">Unsplash-bilde (valgfritt søkeord)</label>
+              <input id="taskImageKeyword" class="form-control" placeholder="f.eks. sunset, classroom, nature" />
+              <div class="form-text">Vi henter et tilfeldig bilde fra Unsplash når du publiserer.</div>
             </div>
             <div class="row g-3 mb-2" id="taskOptions">
               <div class="col-12 col-md-6">

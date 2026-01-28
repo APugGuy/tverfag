@@ -4,6 +4,72 @@ body {
   background-color: rgb(237, 237, 237);
 }
 
+#assignmentsList {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.assignment-card {
+  position: relative;
+  border-radius: 16px;
+  padding: 18px;
+  min-height: 140px;
+  cursor: pointer;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.assignment-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+}
+
+.assignment-card.has-image {
+  border: none;
+  color: #fff;
+  background-size: cover;
+  background-position: center;
+}
+
+.assignment-card__overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(5, 10, 25, 0.25), rgba(5, 10, 25, 0.7));
+}
+
+.assignment-card__body {
+  position: relative;
+  z-index: 1;
+}
+
+.assignment-card.selected {
+  box-shadow: 0 0 0 3px #0d6efd inset;
+}
+
+.assignment-card.no-image {
+  background: linear-gradient(120deg, #f8fafc, #eef2ff);
+}
+
+.assignment-card h6 {
+  margin: 0 0 6px;
+}
+
+.assignment-card p {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.assignment-help {
+  font-size: 0.9rem;
+}
+
+#selectedAssignmentLabel {
+  font-weight: 600;
+}
+
 /* Top container layout */
 .top-container {
   display: flex;
