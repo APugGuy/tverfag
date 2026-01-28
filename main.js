@@ -64,6 +64,7 @@ const correctOptionInputs = Array.prototype.slice.call(document.querySelectorAll
 const taskCreateFeedback = document.getElementById("taskCreateFeedback");
 const clearAllAnswersBtn = document.getElementById("clearAllAnswersBtn");
 const selectedAssignmentLabel = document.getElementById("selectedAssignmentLabel");
+const assignmentDetailsPanel = document.getElementById("assignmentDetailsPanel");
 const selectedAssignmentDetails = document.getElementById("selectedAssignmentDetails");
 const adminAssignmentsSection = document.getElementById("adminAssignmentsSection");
 const adminAssignmentsList = document.getElementById("adminAssignmentsList");
@@ -290,11 +291,13 @@ function updateSelectedAssignmentLabel() {
     selectedAssignmentLabel.textContent = "Ingen oppgave valgt";
     selectedAssignmentLabel.classList.remove("bg-primary", "text-white");
     selectedAssignmentLabel.classList.add("bg-light", "text-dark");
+    if (assignmentDetailsPanel) assignmentDetailsPanel.classList.add("d-none");
     if (selectedAssignmentDetails) {
-      selectedAssignmentDetails.textContent = "Klikk på en oppgaveboks for å lese beskrivelsen.";
+      selectedAssignmentDetails.textContent = "";
     }
     return;
   }
+  if (assignmentDetailsPanel) assignmentDetailsPanel.classList.remove("d-none");
   const task = currentAssignments.find((item) => String(item.id) === String(selectedAssignmentId));
   if (task) {
     selectedAssignmentLabel.textContent = `Valgt: ${task.tittel}`;

@@ -96,12 +96,11 @@
 
           <form id="answerForm" class="needs-validation" novalidate>
             <div class="mb-2">
-              <label class="form-label">Velg oppgave</label>
-              <div class="assignment-help text-muted" id="assignmentHelp">
-                Klikk på oppgavekortene over for å velge hvilken oppgave du svarer på.
-              </div>
               <div id="selectedAssignmentLabel" class="badge bg-light text-dark mt-2">Ingen oppgave valgt</div>
-              <p id="selectedAssignmentDetails" class="text-muted small mt-2 mb-0">Ingen oppgave valgt.</p>
+              <div id="assignmentDetailsPanel" class="assignment-details-panel mt-3 d-none">
+                <div class="assignment-details-header">Oppgavetekst</div>
+                <div id="selectedAssignmentDetails" class="assignment-details-body"></div>
+              </div>
             </div>
             <div class="mb-3">
               <label class="form-label">Alternativer</label>

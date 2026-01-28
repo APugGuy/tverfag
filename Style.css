@@ -78,6 +78,32 @@ body {
   font-weight: 600;
 }
 
+.assignment-details-panel {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px 14px;
+}
+
+.assignment-details-header {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.assignment-details-body {
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: #1e293b;
+  max-height: 260px;
+  min-height: 70px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+}
+
 .unsplash-choice {
   position: relative;
   border: 1px solid rgba(15, 23, 42, 0.12);
