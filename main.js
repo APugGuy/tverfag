@@ -65,6 +65,8 @@ const taskCreateFeedback = document.getElementById("taskCreateFeedback");
 const clearAllAnswersBtn = document.getElementById("clearAllAnswersBtn");
 const selectedAssignmentLabel = document.getElementById("selectedAssignmentLabel");
 const selectedAssignmentDetails = document.getElementById("selectedAssignmentDetails");
+const adminAssignmentsSection = document.getElementById("adminAssignmentsSection");
+const adminAssignmentsList = document.getElementById("adminAssignmentsList");
 const unsplashChoicesContainer = document.getElementById("unsplashChoices");
 const unsplashChoicesStatus = document.getElementById("unsplashChoicesStatus");
 
@@ -85,6 +87,7 @@ let lastUnsplashKeyword = "";
 let unsplashAutoSearchTimeout = null;
 let unsplashQueuedLoadPending = false;
 let unsplashQueuedLoadNeedsRefresh = false;
+let adminAssignments = [];
 
 // Bootstrap modal instance (so we can hide it programmatically)
 const loginModalEl = document.getElementById("loginModal");
@@ -166,6 +169,13 @@ function resetTeacherUI() {
   togglePanel(teacherPanel, false);
   if (answersList) answersList.innerHTML = "";
   setClearAllButtonState(false);
+  resetAdminAssignmentsUI();
+}
+
+function resetAdminAssignmentsUI() {
+  if (adminAssignmentsSection) adminAssignmentsSection.classList.add("d-none");
+  if (adminAssignmentsList) adminAssignmentsList.innerHTML = "";
+  adminAssignments = [];
 }
 
 function parseTaskContent(task) {
@@ -678,11 +688,18 @@ async function refreshRoleViews(user) {
     resetTeacherUI();
     togglePanel(studentPanel, true);
     await loadAssignments();
-  } else if (role === "lærer" || role === "admin") {
-    setRoleHint("Du er logget inn som lærer/administrator.", "secondary");
+  } else if (role === "lærer") {
+    setRoleHint("Du er logget inn som lærer.", "secondary");
     resetStudentUI();
     togglePanel(teacherPanel, true);
     await loadAnswers();
+    resetAdminAssignmentsUI();
+  } else if (role === "admin") {
+    setRoleHint("Du er logget inn som admin.", "secondary");
+    resetStudentUI();
+    togglePanel(teacherPanel, true);
+    await loadAnswers();
+    await loadAdminAssignments();
   } else {
     setRoleHint(`Du er logget inn med rollen "${role}". Ingen paneler tilgjengelig.`, "info");
     resetStudentUI();
@@ -784,6 +801,61 @@ function renderAssignments() {
   renderAnswerOptions(selectedAssignmentId);
 }
 
+function renderAdminAssignments() {
+  if (!adminAssignmentsList) return;
+  if (!adminAssignments.length) {
+    adminAssignmentsList.innerHTML = '<div class="list-group-item text-muted">Ingen oppgaver publisert ennå.</div>';
+    return;
+  }
+
+  const rows = adminAssignments
+    .map((task) => {
+      const safeTitle = escapeHtml(task.tittel || "Uten navn");
+      const createdAt = task.created_at ? new Date(task.created_at).toLocaleString() : "";
+      const taskIdAttr = escapeHtml(String(task.id));
+      return `
+        <div class="list-group-item d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">${safeTitle}</div>
+            <small class="text-muted">${createdAt}</small>
+          </div>
+          <button type="button" class="btn btn-outline-danger btn-sm admin-delete-assignment" data-assignment-id="${taskIdAttr}">
+            Slett
+          </button>
+        </div>
+      `;
+    })
+    .join("");
+
+  adminAssignmentsList.innerHTML = rows;
+}
+
+async function loadAdminAssignments() {
+  if (!adminAssignmentsList || currentRole !== "admin") return;
+  if (adminAssignmentsSection) {
+    adminAssignmentsSection.classList.remove("d-none");
+  }
+  adminAssignmentsList.innerHTML = '<div class="list-group-item text-muted">Laster oppgaver...</div>';
+  try {
+    const { data, error } = await supabaseClient
+      .from("oppgaver")
+      .select("id, tittel, created_at")
+      .order("created_at", { ascending: false });
+    if (error) {
+      console.error("loadAdminAssignments error", error);
+      adminAssignmentsList.innerHTML = `<div class="list-group-item text-danger">${escapeHtml(error.message)}</div>`;
+      adminAssignments = [];
+      return;
+    }
+    adminAssignments = data || [];
+    renderAdminAssignments();
+  } catch (err) {
+    console.error("loadAdminAssignments unexpected", err);
+    adminAssignmentsList.innerHTML = '<div class="list-group-item text-danger">Kunne ikke hente oppgaver.</div>';
+    adminAssignments = [];
+  }
+}
+
 if (assignmentsList) {
   assignmentsList.addEventListener("click", (event) => {
     const card = event.target.closest(".assignment-card");
@@ -792,6 +864,16 @@ if (assignmentsList) {
     if (!assignmentId) return;
     selectedAssignmentId = assignmentId;
     renderAssignments();
+  });
+}
+
+if (adminAssignmentsList) {
+  adminAssignmentsList.addEventListener("click", (event) => {
+    const deleteBtn = event.target.closest(".admin-delete-assignment");
+    if (!deleteBtn) return;
+    const assignmentId = deleteBtn.getAttribute("data-assignment-id");
+    if (!assignmentId) return;
+    deleteAssignmentById(assignmentId);
   });
 }
 
@@ -908,6 +990,46 @@ async function deleteAnswerById(answerId) {
   } catch (err) {
     console.error("deleteAnswerById unexpected", err);
     window.alert("Uventet feil ved sletting.");
+  }
+}
+
+async function deleteAssignmentById(assignmentId) {
+  if (!assignmentId) return;
+  if (currentRole !== "admin") {
+    window.alert("Kun administratorer kan slette oppgaver.");
+    return;
+  }
+  const confirmed = window.confirm(
+    "Dette sletter oppgaven for alle elever og fjerner alle tilknyttede svar. Fortsett?"
+  );
+  if (!confirmed) return;
+  try {
+    const { error: answersError } = await supabaseClient
+      .from("besvarelser")
+      .delete()
+      .eq("oppgave_id", assignmentId);
+    if (answersError) {
+      console.error("deleteAssignmentById answersError", answersError);
+      window.alert("Kunne ikke slette svarene knyttet til oppgaven.");
+      return;
+    }
+
+    const { error: assignmentError } = await supabaseClient
+      .from("oppgaver")
+      .delete()
+      .eq("id", assignmentId);
+    if (assignmentError) {
+      console.error("deleteAssignmentById error", assignmentError);
+      window.alert("Kunne ikke slette oppgaven.");
+      return;
+    }
+
+    await loadAdminAssignments();
+    await loadAssignments();
+    await loadAnswers();
+  } catch (err) {
+    console.error("deleteAssignmentById unexpected", err);
+    window.alert("Uventet feil ved sletting av oppgave.");
   }
 }
 
