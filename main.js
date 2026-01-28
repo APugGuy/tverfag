@@ -13,6 +13,9 @@
     const verified = !!(user && (user.email_confirmed_at || user.confirmed_at));
     if (!verified) {
       // Redirect to index with login modal prompt (stays on same page since this is index)
+    if (!selectedAssignmentId && currentAssignments.length) {
+      selectedAssignmentId = String(currentAssignments[0].id);
+    }
       // Show message after scripts load
       window.__requireLogin = true;
     }
@@ -26,7 +29,9 @@
 const SUPABASE_URL = "https://hyrtpoywvdvghasiewei.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_kneblDkCAHqgGFqgntXgEw_9cc8INOj";
 const UNSPLASH_ACCESS_KEY = "db8EqDOqXs-ZT_71bk4oujJ4Dx1KW390H3bPc4ZA5lY";
-const UNSPLASH_ENDPOINT = "https://api.unsplash.com/photos/random";
+const UNSPLASH_RANDOM_ENDPOINT = "https://api.unsplash.com/photos/random";
+const UNSPLASH_SEARCH_ENDPOINT = "https://api.unsplash.com/search/photos";
+const UNSPLASH_AUTO_SEARCH_DELAY_MS = 500;
 
 // --- create client correctly from the CDN global ---
 // create client from global
@@ -59,6 +64,9 @@ const correctOptionInputs = Array.prototype.slice.call(document.querySelectorAll
 const taskCreateFeedback = document.getElementById("taskCreateFeedback");
 const clearAllAnswersBtn = document.getElementById("clearAllAnswersBtn");
 const selectedAssignmentLabel = document.getElementById("selectedAssignmentLabel");
+const selectedAssignmentDetails = document.getElementById("selectedAssignmentDetails");
+const unsplashChoicesContainer = document.getElementById("unsplashChoices");
+const unsplashChoicesStatus = document.getElementById("unsplashChoicesStatus");
 
 if (correctOptionInputs.length && !correctOptionInputs.some((input) => input.checked)) {
   correctOptionInputs[0].checked = true;
@@ -70,6 +78,13 @@ let currentAssignments = [];
 let answeredAssignmentIds = new Set();
 let roleSwitchBusy = false;
 let selectedAssignmentId = null;
+let unsplashChoiceItems = [];
+let selectedUnsplashImage = null;
+let unsplashChoicesLoading = false;
+let lastUnsplashKeyword = "";
+let unsplashAutoSearchTimeout = null;
+let unsplashQueuedLoadPending = false;
+let unsplashQueuedLoadNeedsRefresh = false;
 
 // Bootstrap modal instance (so we can hide it programmatically)
 const loginModalEl = document.getElementById("loginModal");
@@ -265,13 +280,24 @@ function updateSelectedAssignmentLabel() {
     selectedAssignmentLabel.textContent = "Ingen oppgave valgt";
     selectedAssignmentLabel.classList.remove("bg-primary", "text-white");
     selectedAssignmentLabel.classList.add("bg-light", "text-dark");
+    if (selectedAssignmentDetails) {
+      selectedAssignmentDetails.textContent = "Klikk på en oppgaveboks for å lese beskrivelsen.";
+    }
     return;
   }
   const task = currentAssignments.find((item) => String(item.id) === String(selectedAssignmentId));
   if (task) {
     selectedAssignmentLabel.textContent = `Valgt: ${task.tittel}`;
+    if (selectedAssignmentDetails) {
+      const content = parseTaskContent(task);
+      const prompt = content.prompt || "Ingen beskrivelse.";
+      selectedAssignmentDetails.textContent = prompt;
+    }
   } else {
     selectedAssignmentLabel.textContent = "Oppgaven finnes ikke lenger";
+    if (selectedAssignmentDetails) {
+      selectedAssignmentDetails.textContent = "Oppgaven ble fjernet.";
+    }
   }
   selectedAssignmentLabel.classList.remove("bg-light", "text-dark");
   selectedAssignmentLabel.classList.add("bg-primary", "text-white");
@@ -366,7 +392,7 @@ async function handleRoleSwitchChange(newRole) {
   }
 }
 
-async function fetchUnsplashImage(keyword) {
+async function fetchRandomUnsplashImage(keyword) {
   if (!keyword || !keyword.trim()) return null;
   try {
     const queryParams = new URLSearchParams({
@@ -374,7 +400,7 @@ async function fetchUnsplashImage(keyword) {
       orientation: "landscape",
       content_filter: "high",
     });
-    const response = await fetch(`${UNSPLASH_ENDPOINT}?${queryParams.toString()}`, {
+    const response = await fetch(`${UNSPLASH_RANDOM_ENDPOINT}?${queryParams.toString()}`, {
       headers: {
         Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`,
       },
@@ -391,9 +417,213 @@ async function fetchUnsplashImage(keyword) {
       };
     }
   } catch (err) {
-    console.error("fetchUnsplashImage error", err);
+    console.error("fetchRandomUnsplashImage error", err);
   }
   return null;
+}
+
+async function searchUnsplashImages(keyword, perPage = 6) {
+  if (!keyword || !keyword.trim()) return [];
+  try {
+    const queryParams = new URLSearchParams({
+      query: keyword.trim(),
+      orientation: "landscape",
+      content_filter: "high",
+      per_page: String(perPage),
+    });
+    const response = await fetch(`${UNSPLASH_SEARCH_ENDPOINT}?${queryParams.toString()}`, {
+      headers: {
+        Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`,
+      },
+    });
+    if (!response.ok) {
+      console.warn("Unsplash search failed", response.status, await response.text());
+      return [];
+    }
+    const data = await response.json();
+    if (!data || !Array.isArray(data.results)) return [];
+    return data.results
+      .filter((item) => item && item.urls && item.urls.regular)
+      .map((item) => ({
+        id: item.id,
+        url: item.urls.regular,
+        previewUrl: item.urls.small || item.urls.thumb || item.urls.regular,
+        author: item.user && item.user.name ? item.user.name : "Unsplash",
+        description: item.description || item.alt_description || keyword.trim(),
+        keyword: keyword.trim(),
+      }));
+  } catch (err) {
+    console.error("searchUnsplashImages error", err);
+    return [];
+  }
+}
+
+function setUnsplashStatus(message = "", tone = "muted") {
+  if (!unsplashChoicesStatus) return;
+  const toneClass = tone === "muted" ? "text-muted" : `text-${tone}`;
+  unsplashChoicesStatus.classList.remove("text-muted", "text-success", "text-danger");
+  if (message) {
+    unsplashChoicesStatus.classList.add(toneClass);
+    unsplashChoicesStatus.textContent = message;
+  } else {
+    unsplashChoicesStatus.textContent = "";
+  }
+}
+
+function cancelUnsplashAutoSearchTimer() {
+  if (unsplashAutoSearchTimeout) {
+    clearTimeout(unsplashAutoSearchTimeout);
+    unsplashAutoSearchTimeout = null;
+  }
+}
+
+function renderUnsplashChoices(images) {
+  if (!unsplashChoicesContainer) return;
+  if (!images || !images.length) {
+    unsplashChoicesContainer.innerHTML = "";
+    return;
+  }
+  const cards = images
+    .map((img, index) => {
+      const preview = sanitizeUrl(img.previewUrl || img.url || "");
+      const isSelected = selectedUnsplashImage && selectedUnsplashImage.id === img.id;
+      return `
+        <div class="col-12 col-sm-6 col-md-4 col-lg-3">
+          <label class="unsplash-choice${isSelected ? " selected" : ""}" data-choice-index="${index}">
+            <input type="radio" class="unsplash-choice-input" name="unsplashChoice" value="${index}" ${
+              isSelected ? "checked" : ""
+            } />
+            <div class="unsplash-choice-image" style="background-image:url('${preview}')"></div>
+          </label>
+        </div>
+      `;
+    })
+    .join("");
+  unsplashChoicesContainer.innerHTML = cards;
+}
+
+function clearUnsplashChoices({ clearKeyword = false, message = "" } = {}) {
+  unsplashChoiceItems = [];
+  selectedUnsplashImage = null;
+  cancelUnsplashAutoSearchTimer();
+  unsplashQueuedLoadPending = false;
+  unsplashQueuedLoadNeedsRefresh = false;
+  if (clearKeyword && taskImageKeywordInput) {
+    taskImageKeywordInput.value = "";
+  }
+  if (unsplashChoicesContainer) {
+    unsplashChoicesContainer.innerHTML = "";
+  }
+  if (clearKeyword) {
+    lastUnsplashKeyword = "";
+  }
+  setUnsplashStatus(message, "muted");
+}
+
+function setUnsplashSelection(image) {
+  selectedUnsplashImage = image || null;
+  if (!image) {
+    setUnsplashStatus("Ingen bilde valgt ennå.", "muted");
+  } else {
+    setUnsplashStatus("Et bilde er valgt.", "success");
+  }
+  renderUnsplashChoices(unsplashChoiceItems);
+}
+
+if (taskImageKeywordInput) {
+  taskImageKeywordInput.addEventListener("input", () => {
+    const keyword = taskImageKeywordInput.value.trim();
+    cancelUnsplashAutoSearchTimer();
+    unsplashQueuedLoadPending = false;
+    unsplashQueuedLoadNeedsRefresh = false;
+    if (!keyword) {
+      clearUnsplashChoices({ clearKeyword: true, message: "Skriv inn et søkeord for å hente bilder." });
+      return;
+    }
+    if (keyword === lastUnsplashKeyword && unsplashChoiceItems.length) {
+      setUnsplashStatus("Velg bildet som passer best for oppgaven.", "muted");
+      return;
+    }
+    unsplashChoiceItems = [];
+    selectedUnsplashImage = null;
+    renderUnsplashChoices([]);
+    setUnsplashStatus("Søker etter bilder...", "muted");
+    unsplashAutoSearchTimeout = window.setTimeout(() => {
+      unsplashAutoSearchTimeout = null;
+      loadUnsplashChoices({ refresh: false });
+    }, UNSPLASH_AUTO_SEARCH_DELAY_MS);
+  });
+}
+
+if (unsplashChoicesContainer) {
+  unsplashChoicesContainer.addEventListener("click", (event) => {
+    const target = event.target.closest(".unsplash-choice");
+    if (!target) return;
+    const indexAttr = target.getAttribute("data-choice-index");
+    if (indexAttr === null) return;
+    const index = parseInt(indexAttr, 10);
+    if (Number.isNaN(index) || !unsplashChoiceItems[index]) return;
+    const choice = unsplashChoiceItems[index];
+    if (!choice) return;
+    if (selectedUnsplashImage && selectedUnsplashImage.id === choice.id) {
+      setUnsplashSelection(null);
+      return;
+    }
+    setUnsplashSelection(choice);
+  });
+}
+
+async function loadUnsplashChoices({ refresh = false } = {}) {
+  if (!taskImageKeywordInput) return;
+  const keyword = taskImageKeywordInput.value.trim();
+  if (!keyword) {
+    setUnsplashStatus("Skriv inn et søkeord for å finne bilder.", "danger");
+    return;
+  }
+  if (!refresh && keyword === lastUnsplashKeyword && unsplashChoiceItems.length) {
+    renderUnsplashChoices(unsplashChoiceItems);
+    setUnsplashStatus("Velg ett av bildene under. Skriv inn et nytt søkeord for flere forslag.", "muted");
+    return;
+  }
+  if (unsplashChoicesLoading) {
+    unsplashQueuedLoadPending = true;
+    if (refresh) unsplashQueuedLoadNeedsRefresh = true;
+    return;
+  }
+  unsplashChoicesLoading = true;
+  unsplashQueuedLoadPending = false;
+  unsplashQueuedLoadNeedsRefresh = false;
+  setUnsplashStatus("Søker etter bilder...", "muted");
+  try {
+    const images = await searchUnsplashImages(keyword, 8);
+    lastUnsplashKeyword = keyword;
+    unsplashChoiceItems = images;
+    if (!images.length) {
+      setUnsplashSelection(null);
+      setUnsplashStatus("Fant ingen treff. Prøv et annet søkeord.", "danger");
+      return;
+    }
+    if (refresh) {
+      setUnsplashSelection(null);
+    } else if (selectedUnsplashImage && selectedUnsplashImage.keyword !== keyword) {
+      selectedUnsplashImage = null;
+    }
+    renderUnsplashChoices(images);
+    if (!selectedUnsplashImage) {
+      setUnsplashStatus("Velg bildet som passer best for oppgaven.", "muted");
+    }
+  } catch (err) {
+    console.error("loadUnsplashChoices error", err);
+    setUnsplashStatus("Kunne ikke hente bilder nå.", "danger");
+  } finally {
+    unsplashChoicesLoading = false;
+    if (unsplashQueuedLoadPending) {
+      const shouldRefresh = unsplashQueuedLoadNeedsRefresh;
+      unsplashQueuedLoadPending = false;
+      unsplashQueuedLoadNeedsRefresh = false;
+      loadUnsplashChoices({ refresh: shouldRefresh });
+    }
+  }
 }
 
 async function fetchUserRole(userId) {
@@ -524,9 +754,7 @@ function renderAssignments() {
   const cardsHtml = currentAssignments
     .map((task) => {
       const content = parseTaskContent(task);
-      const promptText = content.prompt || task.beskrivelse || "Ingen beskrivelse.";
       const safeTitle = escapeHtml(task.tittel || "Untitled");
-      const safePrompt = escapeHtml(promptText);
       const createdAt = task.created_at ? new Date(task.created_at).toLocaleDateString() : "";
       const imageUrl = content.imageUrl ? sanitizeUrl(content.imageUrl) : "";
       const hasImage = !!imageUrl;
@@ -540,11 +768,10 @@ function renderAssignments() {
         <article class="${classes.join(" ")}" data-assignment-id="${task.id}" ${style}>
           ${overlay}
           <div class="assignment-card__body">
-            <div class="d-flex justify-content-between align-items-center mb-2">
+            <div class="d-flex justify-content-between align-items-center w-100">
               <h6 class="mb-0">${safeTitle}</h6>
               <small class="text-muted">${createdAt}</small>
             </div>
-            <p class="mb-0">${safePrompt}</p>
           </div>
         </article>
       `;
@@ -825,6 +1052,9 @@ if (createTaskForm) {
     const imageKeyword = taskImageKeywordInput && typeof taskImageKeywordInput.value === "string"
       ? taskImageKeywordInput.value.trim()
       : "";
+    if (selectedUnsplashImage && selectedUnsplashImage.keyword !== imageKeyword) {
+      selectedUnsplashImage = null;
+    }
     const optionItems = taskOptionInputs
       .map((input) => {
         if (!input) return null;
@@ -865,8 +1095,10 @@ if (createTaskForm) {
 
     try {
       let backgroundImage = null;
-      if (imageKeyword) {
-        backgroundImage = await fetchUnsplashImage(imageKeyword);
+      if (selectedUnsplashImage && selectedUnsplashImage.keyword === imageKeyword) {
+        backgroundImage = selectedUnsplashImage;
+      } else if (imageKeyword) {
+        backgroundImage = await fetchRandomUnsplashImage(imageKeyword);
       }
       const payloadContent = {
         prompt,
@@ -892,6 +1124,7 @@ if (createTaskForm) {
 
       createTaskForm.reset();
       if (taskImageKeywordInput) taskImageKeywordInput.value = "";
+      clearUnsplashChoices({ clearKeyword: true, message: "Skriv inn et søkeord for å hente bilder." });
       correctOptionInputs.forEach((input, index) => {
         if (index === 0) {
           input.checked = true;

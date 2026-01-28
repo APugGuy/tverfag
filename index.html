@@ -101,6 +101,7 @@
                 Klikk på oppgavekortene over for å velge hvilken oppgave du svarer på.
               </div>
               <div id="selectedAssignmentLabel" class="badge bg-light text-dark mt-2">Ingen oppgave valgt</div>
+              <p id="selectedAssignmentDetails" class="text-muted small mt-2 mb-0">Ingen oppgave valgt.</p>
             </div>
             <div class="mb-3">
               <label class="form-label">Alternativer</label>
@@ -131,7 +132,9 @@
             <div class="mb-2">
               <label class="form-label" for="taskImageKeyword">Unsplash-bilde (valgfritt søkeord)</label>
               <input id="taskImageKeyword" class="form-control" placeholder="f.eks. sunset, classroom, nature" />
-              <div class="form-text">Vi henter et tilfeldig bilde fra Unsplash når du publiserer.</div>
+              <div class="form-text">Bilder hentes automatisk mens du skriver inn søkeordet.</div>
+              <div id="unsplashChoicesStatus" class="form-text mt-2"></div>
+              <div id="unsplashChoices" class="row g-2 mt-2"></div>
             </div>
             <div class="row g-3 mb-2" id="taskOptions">
               <div class="col-12 col-md-6">
