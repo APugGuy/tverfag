@@ -4,6 +4,95 @@ body {
   background-color: rgb(237, 237, 237);
 }
 
+.landing-body {
+  font-family: "Segoe UI", Arial, sans-serif;
+  background: #0f172a;
+  color: #0f172a;
+}
+
+.landing-hero {
+  position: relative;
+  min-height: 70vh;
+  background: url("pictures/classroom.jpg") center/cover no-repeat, linear-gradient(135deg, #16213e, #243b55);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 32px 0 80px;
+}
+
+.landing-hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(4, 12, 31, 0.6), rgba(4, 12, 31, 0.9));
+}
+
+.landing-top,
+.landing-content {
+  position: relative;
+  z-index: 1;
+}
+
+.landing-logo {
+  font-size: 1.4rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.landing-content h1 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  margin: 1rem 0;
+  color: #fff;
+}
+
+.landing-content p.lead {
+  color: rgba(255, 255, 255, 0.8);
+  max-width: 640px;
+  margin: 0 auto 1.5rem;
+}
+
+.landing-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+}
+
+.landing-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.landing-main {
+  background: #fff;
+}
+
+.landing-feature {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 20px;
+  padding: 24px;
+  background: #f8fafc;
+  height: 100%;
+}
+
+.landing-feature h5 {
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+}
+
+.landing-feature p {
+  margin: 0;
+  color: #475569;
+}
+
 #assignmentsList {
   display: flex;
   flex-wrap: wrap;
