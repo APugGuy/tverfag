@@ -1353,21 +1353,9 @@ async function updateUIFromUser(user) {
             <div class="form-text" id="roleSwitchFeedback"></div>
           </div>
           <div class="dropdown-divider"></div>
-          <div class="px-2">
-            <table class="table table-borderless table-sm mb-2">
-              <tbody>
-                <tr><td>Profil</td><td class="text-end"><button id="sendMeldingBtn" class="btn btn-sm btn-primary">Send melding</button></td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="dropdown-divider"></div>
           <button class="dropdown-item text-danger" id="dropdownLogout">Logg ut</button>
         `;
       // Wire actions
-      const sendBtn = document.getElementById("sendMeldingBtn");
-      if (sendBtn) sendBtn.onclick = () => {
-        window.location.href = "melding side.html";
-      };
       const dLogout = document.getElementById("dropdownLogout");
       if (dLogout)
         dLogout.onclick = async () => {
