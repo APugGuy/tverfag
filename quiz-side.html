@@ -86,7 +86,7 @@
 
     <!-- Role based content -->
     <main class="container py-4" id="rolePanels">
-      <div id="roleHint" class="alert alert-info d-none"></div>
+      <div id="roleHint" class="role-hint d-none"></div>
 
       <section id="studentPanel" class="card shadow-sm d-none">
         <div class="card-body">
@@ -113,87 +113,125 @@
         </div>
       </section>
 
-      <section id="teacherPanel" class="card shadow-sm d-none">
-        <div class="card-body">
-          <h5 class="card-title">Besvarelser fra elever</h5>
-          <p class="text-muted">Kun lærere og administratorer kan se denne oversikten.</p>
+      <section id="teacherPanel" class="teacher-panel card shadow-sm d-none">
+        <div class="teacher-panel__hero">
+          <div>
+            <p class="teacher-panel__eyebrow">Lærerrommet</p>
+            <h2>Besvarelser og oppgaver</h2>
+            <p class="text-muted mb-0">Kun lærere og administratorer har tilgang til denne oversikten.</p>
+          </div>
+          <div class="teacher-panel__badge">
+            <span class="badge bg-light text-dark">Live oppdateringer</span>
+          </div>
+        </div>
 
-          <form id="createTaskForm" class="border rounded p-3 mb-4 bg-light">
-            <h6 class="mb-3">Lag ny flervalgsoppgave</h6>
-            <div class="mb-2">
-              <label class="form-label" for="taskTitle">Tittel / tema</label>
-              <input id="taskTitle" class="form-control" required />
-            </div>
-            <div class="mb-2">
-              <label class="form-label" for="taskPrompt">Spørsmålstekst</label>
-              <textarea id="taskPrompt" class="form-control" rows="3" required></textarea>
-            </div>
-            <div class="mb-2">
-              <label class="form-label" for="taskImageKeyword">Unsplash-bilde (valgfritt søkeord)</label>
-              <input id="taskImageKeyword" class="form-control" placeholder="f.eks. sunset, classroom, nature" />
-              <div class="form-text">Bilder hentes automatisk mens du skriver inn søkeordet.</div>
-              <div id="unsplashChoicesStatus" class="form-text mt-2"></div>
-              <div id="unsplashChoices" class="row g-2 mt-2"></div>
-            </div>
-            <div class="row g-3 mb-2" id="taskOptions">
-              <div class="col-12 col-md-6">
-                <label class="form-label">Alternativ 1</label>
-                <div class="input-group">
-                  <span class="input-group-text" title="Merk som riktig">
-                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="0" required />
-                  </span>
-                  <input class="form-control task-option" data-index="0" required />
+        <div class="teacher-grid">
+          <div class="teacher-grid__column">
+            <form id="createTaskForm" class="teacher-card teacher-create-form">
+              <div class="teacher-card__header">
+                <div>
+                  <p class="teacher-panel__eyebrow mb-1">Oppgaver</p>
+                  <h5 class="mb-0">Lag ny flervalgsoppgave</h5>
                 </div>
               </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label">Alternativ 2</label>
-                <div class="input-group">
-                  <span class="input-group-text" title="Merk som riktig">
-                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="1" />
-                  </span>
-                  <input class="form-control task-option" data-index="1" required />
+              <div class="teacher-card__body">
+                <div class="mb-3">
+                  <label class="form-label" for="taskTitle">Tittel / tema</label>
+                  <input id="taskTitle" class="form-control" required />
                 </div>
-              </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label">Alternativ 3 (valgfri)</label>
-                <div class="input-group">
-                  <span class="input-group-text" title="Merk som riktig">
-                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="2" />
-                  </span>
-                  <input class="form-control task-option" data-index="2" />
+                <div class="mb-3">
+                  <label class="form-label" for="taskPrompt">Spørsmålstekst</label>
+                  <textarea id="taskPrompt" class="form-control" rows="3" required></textarea>
                 </div>
-              </div>
-              <div class="col-12 col-md-6">
-                <label class="form-label">Alternativ 4 (valgfri)</label>
-                <div class="input-group">
-                  <span class="input-group-text" title="Merk som riktig">
-                    <input class="form-check-input correct-option" type="radio" name="correctOption" value="3" />
-                  </span>
-                  <input class="form-control task-option" data-index="3" />
+                <div class="mb-3">
+                  <label class="form-label" for="taskImageKeyword">Unsplash-bilde (valgfritt søkeord)</label>
+                  <input id="taskImageKeyword" class="form-control" placeholder="f.eks. sunset, classroom, nature" />
+                  <div class="form-text">Bilder hentes automatisk mens du skriver inn søkeordet.</div>
+                  <div id="unsplashChoicesStatus" class="form-text mt-2"></div>
+                  <div id="unsplashChoices" class="row g-2 mt-2"></div>
                 </div>
+                <div class="row g-3 mb-3" id="taskOptions">
+                  <div class="col-12 col-md-6">
+                    <label class="form-label">Alternativ 1</label>
+                    <div class="input-group">
+                      <span class="input-group-text" title="Merk som riktig">
+                        <input class="form-check-input correct-option" type="radio" name="correctOption" value="0" required />
+                      </span>
+                      <input class="form-control task-option" data-index="0" required />
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label">Alternativ 2</label>
+                    <div class="input-group">
+                      <span class="input-group-text" title="Merk som riktig">
+                        <input class="form-check-input correct-option" type="radio" name="correctOption" value="1" />
+                      </span>
+                      <input class="form-control task-option" data-index="1" required />
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label">Alternativ 3 (valgfri)</label>
+                    <div class="input-group">
+                      <span class="input-group-text" title="Merk som riktig">
+                        <input class="form-check-input correct-option" type="radio" name="correctOption" value="2" />
+                      </span>
+                      <input class="form-control task-option" data-index="2" />
+                    </div>
+                  </div>
+                  <div class="col-12 col-md-6">
+                    <label class="form-label">Alternativ 4 (valgfri)</label>
+                    <div class="input-group">
+                      <span class="input-group-text" title="Merk som riktig">
+                        <input class="form-check-input correct-option" type="radio" name="correctOption" value="3" />
+                      </span>
+                      <input class="form-control task-option" data-index="3" />
+                    </div>
+                  </div>
+                </div>
+                <p class="small text-muted mb-3">Klikk på sirkelen foran et alternativ for å markere hvilket svar som er riktig.</p>
+                <button type="submit" class="btn btn-success w-100">Publiser oppgave</button>
+                <div id="taskCreateFeedback" class="form-text mt-3"></div>
               </div>
-            </div>
-            <p class="small text-muted">Klikk på sirkelen foran et alternativ for å markere hvilket svar som er riktig.</p>
-            <button type="submit" class="btn btn-success">Publiser oppgave</button>
-            <div id="taskCreateFeedback" class="form-text mt-2"></div>
-          </form>
-
-          <div id="adminAssignmentsSection" class="mt-4 d-none">
-            <div class="d-flex justify-content-between align-items-center mb-2">
-              <h6 class="mb-0">Publiserte oppgaver</h6>
-              <span class="badge bg-dark">Kun admin</span>
-            </div>
-            <p class="small text-muted">Sletting fjerner oppgaven for alle elever og sletter tilhørende svar.</p>
-            <div id="adminAssignmentsList" class="list-group small"></div>
+            </form>
           </div>
 
-          <div class="d-flex justify-content-between align-items-center mt-4 mb-2">
-            <h6 class="mb-0">Elevlogg</h6>
-            <button type="button" class="btn btn-outline-danger btn-sm" id="clearAllAnswersBtn">
-              Slett alle
-            </button>
+          <div class="teacher-grid__column teacher-grid__column--secondary">
+            <div id="adminAssignmentsSection" class="teacher-card d-none">
+              <div class="teacher-card__header">
+                <div>
+                  <p class="teacher-panel__eyebrow mb-1 text-uppercase">Administrasjon</p>
+                  <h6 class="mb-0">Publiserte oppgaver</h6>
+                </div>
+                <span class="badge bg-dark">Kun admin</span>
+              </div>
+              <div class="teacher-card__body">
+                <p class="small text-muted">Sletting fjerner oppgaven for alle elever og sletter tilhørende svar.</p>
+                <div id="adminAssignmentsList" class="list-group small"></div>
+              </div>
+            </div>
+
+            <div class="teacher-card mt-4">
+              <div class="teacher-card__header align-items-center flex-wrap gap-3">
+                <div>
+                  <p class="teacher-panel__eyebrow mb-1 text-uppercase">Oversikt</p>
+                  <h6 class="mb-0">Elevlogg</h6>
+                </div>
+                <div class="answers-view-controls">
+                  <label class="form-label small mb-1 d-block">Sorter</label>
+                  <div class="d-flex gap-2 flex-wrap">
+                    <select id="answersViewSelect" class="form-select form-select-sm">
+                      <option value="students">Etter elev</option>
+                      <option value="assignments">Etter oppgave</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="clearAllAnswersBtn">
+                      Slett alle
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div id="answersList" class="teacher-card__body"></div>
+            </div>
           </div>
-          <div id="answersList" class="table-responsive"></div>
         </div>
       </section>
     </main>

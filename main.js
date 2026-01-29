@@ -66,6 +66,7 @@ const answerOptions = document.getElementById("answerOptions");
 const answerForm = document.getElementById("answerForm");
 const answerFeedback = document.getElementById("answerFeedback");
 const answersList = document.getElementById("answersList");
+const answersViewSelect = document.getElementById("answersViewSelect");
 const submitAnswerBtn = document.getElementById("submitAnswerBtn");
 const createTaskForm = document.getElementById("createTaskForm");
 const taskTitleInput = document.getElementById("taskTitle");
@@ -101,6 +102,10 @@ let unsplashAutoSearchTimeout = null;
 let unsplashQueuedLoadPending = false;
 let unsplashQueuedLoadNeedsRefresh = false;
 let adminAssignments = [];
+let currentAnswersEntries = [];
+let currentAnswersOppgaveMap = new Map();
+let currentAnswersStudentMap = new Map();
+let answersViewMode = "students";
 
 // Bootstrap modal instance (so we can hide it programmatically)
 const loginModalEl = document.getElementById("loginModal");
@@ -153,7 +158,7 @@ function setRoleHint(message, type = "info") {
     return;
   }
   roleHint.textContent = message;
-  roleHint.className = `alert alert-${type}`;
+  roleHint.className = `role-hint role-hint--${type}`;
 }
 
 function togglePanel(panel, show) {
@@ -697,7 +702,11 @@ async function refreshRoleViews(user) {
   }
 
   setRoleHint("Henter rolle...", "info");
-  const role = await fetchUserRole(user.id);
+  let role = await fetchUserRole(user.id);
+  if (!role) {
+    await ensureDefaultRole(user);
+    role = await fetchUserRole(user.id);
+  }
   currentRole = role;
   syncRoleSwitchUI();
 
@@ -732,6 +741,26 @@ async function refreshRoleViews(user) {
     setRoleHint(`Du er logget inn med rollen "${role}". Ingen paneler tilgjengelig.`, "info");
     resetStudentUI();
     resetTeacherUI();
+  }
+}
+
+async function ensureDefaultRole(user) {
+  try {
+    if (!user) return;
+    const { data, error } = await supabaseClient
+      .from("profiles")
+      .update({ role: "elev" })
+      .eq("id", user.id)
+      .is("role", null)
+      .select("role");
+    if (error) {
+      console.warn("ensureDefaultRole error", error);
+    } else if (data && data.length) {
+      currentRole = "elev";
+      syncRoleSwitchUI();
+    }
+  } catch (err) {
+    console.warn("ensureDefaultRole unexpected", err);
   }
 }
 
@@ -931,10 +960,18 @@ async function loadAnswers() {
     if (oppgaveIds.length) {
       const { data: oppgaverData, error: oppgaveError } = await supabaseClient
         .from("oppgaver")
-        .select("id, tittel")
+        .select("id, tittel, beskrivelse")
         .in("id", oppgaveIds);
       if (!oppgaveError && oppgaverData) {
-        oppgaverData.forEach((oppgave) => oppgaveMap.set(oppgave.id, oppgave.tittel));
+        oppgaverData.forEach((oppgave) => {
+          if (!oppgave) return;
+          const parsed = parseTaskContent(oppgave);
+          const correctOption = parsed && parsed.correctOption ? parsed.correctOption : null;
+          oppgaveMap.set(oppgave.id, {
+            title: oppgave.tittel || `Oppgave ${oppgave.id}`,
+            correctOption: correctOption || null,
+          });
+        });
       }
     }
 
@@ -951,7 +988,10 @@ async function loadAnswers() {
       }
     }
 
-    renderAnswersTable(answers, oppgaveMap, studentMap);
+    currentAnswersEntries = answers;
+    currentAnswersOppgaveMap = oppgaveMap;
+    currentAnswersStudentMap = studentMap;
+    renderAnswersView();
   } catch (err) {
     console.error("loadAnswers unexpected", err);
     setClearAllButtonState(false);
@@ -959,47 +999,201 @@ async function loadAnswers() {
   }
 }
 
-function renderAnswersTable(answers, oppgaveMap, studentMap) {
+function renderAnswersView() {
   if (!answersList) return;
-  if (!answers.length) {
+  if (!currentAnswersEntries.length) {
     answersList.innerHTML = '<div class="alert alert-info mb-0">Ingen besvarelser sendt inn ennå.</div>';
     return;
   }
 
-  const rows = answers
-    .map((ans) => {
-      const oppgaveNavn = oppgaveMap.get(ans.oppgave_id) || ans.oppgave_id;
-      const elevNavn = studentMap.get(ans.elev_id) || ans.elev_navn || ans.elev_id;
-      const timestamp = ans.created_at ? new Date(ans.created_at).toLocaleString() : "-";
+  if (answersViewMode === "assignments") {
+    answersList.innerHTML = renderAnswersGroupedByAssignment();
+  } else {
+    answersList.innerHTML = renderAnswersGroupedByStudent();
+  }
+}
+
+function renderAnswersGroupedByStudent() {
+  const grouped = new Map();
+  currentAnswersEntries.forEach((entry) => {
+    const key = entry.elev_id || entry.elev_navn || "ukjent";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(entry);
+  });
+
+  const groupArray = Array.from(grouped.entries()).map(([key, entries]) => {
+    const displayName = currentAnswersStudentMap.get(key) || entries[0].elev_navn || key;
+    const sortedEntries = entries
+      .slice()
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    return {
+      title: displayName,
+      meta: `${sortedEntries.length} svar`,
+      entries: sortedEntries,
+    };
+  });
+
+  groupArray.sort((a, b) => a.title.localeCompare(b.title, "nb"));
+  if (!groupArray.length) {
+    return '<div class="alert alert-info mb-0">Ingen besvarelser sendt inn ennå.</div>';
+  }
+
+  return groupArray
+    .map((group) => {
       return `
-        <tr>
-          <td>${escapeHtml(String(oppgaveNavn))}</td>
-          <td>${escapeHtml(String(elevNavn))}</td>
-          <td>${escapeHtml(String(ans.svar || ""))}</td>
-          <td>${timestamp}</td>
-          <td class="text-end">
-            <button type="button" class="btn btn-sm btn-outline-danger delete-answer-btn" data-answer-id="${ans.id}">
-              Slett
-            </button>
-          </td>
-        </tr>
+        <section class="answers-group">
+          <div class="answers-group__header">
+            <h6 class="answers-group__title">${escapeHtml(String(group.title))}</h6>
+            <span class="answers-group__meta">${group.meta}</span>
+          </div>
+          ${buildAnswersTable(group.entries, { showAssignment: true, showStudent: false })}
+        </section>
       `;
     })
     .join("");
+}
 
-  answersList.innerHTML = `
-    <table class="table table-striped align-middle">
-      <thead>
-        <tr>
-          <th>Oppgave</th>
-          <th>Elev</th>
-          <th>Svar</th>
-          <th>Tidspunkt</th>
-          <th class="text-end">Handling</th>
-        </tr>
-      </thead>
-      <tbody>${rows}</tbody>
-    </table>
+function renderAnswersGroupedByAssignment() {
+  const grouped = new Map();
+  currentAnswersEntries.forEach((entry) => {
+    const key = entry.oppgave_id || "ukjent";
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(entry);
+  });
+
+  const groupArray = Array.from(grouped.entries()).map(([key, entries]) => {
+    const meta = getAnswerAssignmentMeta(key);
+    const title = meta.title || `Oppgave ${key}`;
+    const sortedEntries = entries
+      .slice()
+      .sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+    return {
+      title,
+      meta: `${sortedEntries.length} svar`,
+      entries: sortedEntries,
+    };
+  });
+
+  groupArray.sort((a, b) => String(a.title).localeCompare(String(b.title), "nb"));
+  if (!groupArray.length) {
+    return '<div class="alert alert-info mb-0">Ingen besvarelser sendt inn ennå.</div>';
+  }
+
+  return groupArray
+    .map((group) => {
+      return `
+        <section class="answers-group">
+          <div class="answers-group__header">
+            <h6 class="answers-group__title">${escapeHtml(String(group.title))}</h6>
+            <span class="answers-group__meta">${group.meta}</span>
+          </div>
+          ${buildAnswersTable(group.entries, { showAssignment: false, showStudent: true })}
+        </section>
+      `;
+    })
+    .join("");
+}
+
+function getAnswerAssignmentMeta(oppgaveId) {
+  const fallbackTitle = oppgaveId ? `Oppgave ${oppgaveId}` : "Ukjent oppgave";
+  const meta = currentAnswersOppgaveMap.get(oppgaveId);
+  if (!meta) {
+    return { title: fallbackTitle, correctOption: null };
+  }
+  if (typeof meta === "string") {
+    return { title: meta, correctOption: null };
+  }
+  return {
+    title: meta.title || fallbackTitle,
+    correctOption: meta.correctOption || null,
+  };
+}
+
+function buildAnswersTable(entries, { showAssignment = true, showStudent = true } = {}) {
+  const headerCells = [];
+  if (showAssignment) headerCells.push("Oppgave");
+  if (showStudent) headerCells.push("Elev");
+  headerCells.push("Status", "Svar", "Tidspunkt", "Handling");
+
+  const rows = entries
+    .map((ans) => {
+      const meta = getAnswerAssignmentMeta(ans.oppgave_id);
+      const oppgaveNavn = meta.title || ans.oppgave_id;
+      const correctOption = meta.correctOption;
+      const elevNavn = currentAnswersStudentMap.get(ans.elev_id) || ans.elev_navn || ans.elev_id;
+      const timestamp = ans.created_at ? new Date(ans.created_at).toLocaleString() : "-";
+      const rawStudentAnswer = ans.svar;
+      const normalizedStudentAnswer =
+        typeof rawStudentAnswer === "string"
+          ? rawStudentAnswer.trim()
+          : rawStudentAnswer != null
+          ? String(rawStudentAnswer).trim()
+          : "";
+      const normalizedCorrect =
+        typeof correctOption === "string"
+          ? correctOption.trim()
+          : correctOption != null
+          ? String(correctOption).trim()
+          : "";
+      const hasCorrect = !!normalizedCorrect;
+      const studentAnswerKey = normalizedStudentAnswer.toLocaleLowerCase();
+      const correctAnswerKey = normalizedCorrect.toLocaleLowerCase();
+      let statusSymbol = "&ndash;";
+      let statusModifier = "answer-status-icon--unknown";
+      let statusTitle = hasCorrect ? "Ingen svar registrert" : "Ingen fasit";
+
+      if (hasCorrect && studentAnswerKey) {
+        if (studentAnswerKey === correctAnswerKey) {
+          statusSymbol = "&#10003;";
+          statusModifier = "answer-status-icon--correct";
+          statusTitle = "Riktig svar";
+        } else {
+          statusSymbol = "&#10005;";
+          statusModifier = "answer-status-icon--incorrect";
+          const correctDisplay = correctOption != null ? String(correctOption) : "";
+          statusTitle = correctDisplay ? `Fasit: ${correctDisplay}` : "Feil svar";
+        }
+      } else if (hasCorrect && !studentAnswerKey) {
+        statusSymbol = "?";
+        statusModifier = "answer-status-icon--unknown";
+        statusTitle = "Ingen svar registrert";
+      } else if (!hasCorrect && studentAnswerKey) {
+        statusSymbol = "?";
+        statusModifier = "answer-status-icon--unknown";
+        statusTitle = "Ingen fasit";
+      }
+
+      const statusIconHtml = `<span class="answer-status-icon ${statusModifier}" title="${escapeHtml(
+        statusTitle
+      )}">${statusSymbol}</span>`;
+      const cells = [];
+      if (showAssignment) cells.push(`<td>${escapeHtml(String(oppgaveNavn))}</td>`);
+      if (showStudent) cells.push(`<td>${escapeHtml(String(elevNavn))}</td>`);
+      cells.push(
+        `<td class="answer-status">${statusIconHtml}</td>`,
+        `<td>${escapeHtml(String(ans.svar ?? ""))}</td>`,
+        `<td>${timestamp}</td>`,
+        `<td class="text-end">
+          <button type="button" class="btn btn-sm btn-outline-danger delete-answer-btn" data-answer-id="${ans.id}">
+            Slett
+          </button>
+        </td>`
+      );
+      return `<tr>${cells.join("")}</tr>`;
+    })
+    .join("");
+
+  return `
+    <div class="table-responsive">
+      <table class="table table-sm align-middle mb-0">
+        <thead>
+          <tr>
+            ${headerCells.map((label) => `<th>${label}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
   `;
 }
 
@@ -1314,6 +1508,14 @@ if (clearAllAnswersBtn) {
   });
 }
 
+if (answersViewSelect) {
+  answersViewMode = answersViewSelect.value || "students";
+  answersViewSelect.addEventListener("change", () => {
+    answersViewMode = answersViewSelect.value || "students";
+    renderAnswersView();
+  });
+}
+
 // --- Update UI based on user state ---
 async function updateUIFromUser(user) {
   if (user) {
@@ -1621,6 +1823,11 @@ signupBtn.onclick = async () => {
     const { data, error } = await supabaseClient.auth.signUp({
       email,
       password,
+      options: {
+        data: {
+          role: "elev",
+        },
+      },
     });
 
     if (error) {
