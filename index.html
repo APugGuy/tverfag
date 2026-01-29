@@ -16,7 +16,7 @@
 			<div class="landing-hero-overlay"></div>
 			<div class="landing-top container d-flex align-items-center justify-content-between">
 				<div class="landing-logo">Quiz-portalen</div>
-				<a href="quiz-side.html" class="btn btn-outline-light btn-sm">Gå til innlogging</a>
+				<a id="goToLoginLink" href="quiz-side.html" class="btn btn-outline-light btn-sm">Gå til innlogging</a>
 			</div>
 			<div class="landing-content container text-center">
 				<div class="landing-pill">Akademiet prosjekt</div>
@@ -60,12 +60,46 @@
 			</div>
 		</main>
 
+		<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 		<script>
+			const SUPABASE_URL = "https://hyrtpoywvdvghasiewei.supabase.co";
+			const SUPABASE_ANON_KEY = "sb_publishable_kneblDkCAHqgGFqgntXgEw_9cc8INOj";
+			const landingSupabase = window.supabase
+				? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+				: null;
+
+			function navigateToPortal(forceLogin) {
+				const target = new URL("quiz-side.html", window.location.href);
+				if (forceLogin) {
+					target.searchParams.set("showLogin", "1");
+				}
+				window.location.href = target.toString();
+			}
+
+			const loginLink = document.getElementById("goToLoginLink");
+			if (loginLink) {
+				loginLink.addEventListener("click", async (event) => {
+					event.preventDefault();
+					if (!landingSupabase) {
+						window.location.href = loginLink.getAttribute("href");
+						return;
+					}
+					try {
+						const { data } = await landingSupabase.auth.getUser();
+						const user = data && data.user ? data.user : null;
+						navigateToPortal(!user);
+					} catch (err) {
+						console.warn("Klarte ikke å sjekke innlogging", err);
+						window.location.href = loginLink.getAttribute("href");
+					}
+				});
+			}
+
 			const btn = document.getElementById("enterQuizBtn");
 			if (btn) {
 				btn.addEventListener("keyup", (event) => {
 					if (event.key === "Enter" || event.key === " ") {
-						window.location.href = "quiz-side.html";
+						navigateToPortal(false);
 					}
 				});
 			}

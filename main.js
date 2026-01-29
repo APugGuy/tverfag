@@ -25,6 +25,18 @@
   }
 })();
 
+(function syncLandingLoginFlag() {
+  const params = new URLSearchParams(window.location.search);
+  const shouldForceLogin = params.get("showLogin") === "1";
+  window.__forceLoginFromLanding = shouldForceLogin;
+  if (params.has("showLogin")) {
+    params.delete("showLogin");
+    const nextQuery = params.toString();
+    const nextUrl = `${window.location.pathname}${nextQuery ? `?${nextQuery}` : ""}${window.location.hash || ""}`;
+    window.history.replaceState({}, "", nextUrl);
+  }
+})();
+
 // --- CONFIG (already set by you) ---
 const SUPABASE_URL = "https://hyrtpoywvdvghasiewei.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_kneblDkCAHqgGFqgntXgEw_9cc8INOj";
@@ -95,6 +107,19 @@ const loginModalEl = document.getElementById("loginModal");
 let bootstrapModal;
 if (loginModalEl) {
   bootstrapModal = bootstrap.Modal.getOrCreateInstance(loginModalEl);
+}
+
+function openLoginModal(message) {
+  if (!loginModalEl) return;
+  try {
+    const modalInstance = bootstrap.Modal.getOrCreateInstance(loginModalEl);
+    modalInstance.show();
+    if (message) {
+      showMessage(message);
+    }
+  } catch (err) {
+    console.warn("Kunne ikke åpne innloggingsmodal", err);
+  }
 }
 
 // --- Helpers ---
@@ -1391,6 +1416,10 @@ async function initAuth() {
       }
       updateUIFromUser(null);
       await refreshRoleViews(null);
+      if (window.__forceLoginFromLanding) {
+        openLoginModal("Logg inn for å fortsette.");
+        window.__forceLoginFromLanding = false;
+      }
       return;
     }
     // Enforce verification: treat unverified as logged out.
@@ -1403,6 +1432,11 @@ async function initAuth() {
       updateUIFromUser(null);
       await refreshRoleViews(null);
       showMessage("E-post må bekreftes før innlogging. Sjekk innboksen for verifiseringslenke.");
+      if (window.__requireLogin || window.__forceLoginFromLanding) {
+        openLoginModal();
+        window.__forceLoginFromLanding = false;
+        window.__requireLogin = false;
+      }
       return;
     }
     updateUIFromUser(user);
@@ -1410,14 +1444,11 @@ async function initAuth() {
 
     // If guard requested login, open login modal
     if (window.__requireLogin) {
-      try {
-        const lm = bootstrap.Modal.getOrCreateInstance(
-          document.getElementById("loginModal")
-        );
-        lm.show();
-        showMessage("Logg inn for å fortsette.");
-      } catch (e) {}
+      openLoginModal("Logg inn for å fortsette.");
       window.__requireLogin = false;
+    }
+    if (window.__forceLoginFromLanding) {
+      window.__forceLoginFromLanding = false;
     }
   } catch (err) {
     console.error("initAuth error:", err);
