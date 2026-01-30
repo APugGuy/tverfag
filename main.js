@@ -44,6 +44,12 @@ const UNSPLASH_ACCESS_KEY = "db8EqDOqXs-ZT_71bk4oujJ4Dx1KW390H3bPc4ZA5lY";
 const UNSPLASH_RANDOM_ENDPOINT = "https://api.unsplash.com/photos/random";
 const UNSPLASH_SEARCH_ENDPOINT = "https://api.unsplash.com/search/photos";
 const UNSPLASH_AUTO_SEARCH_DELAY_MS = 500;
+const DIFFICULTY_LEVELS = {
+  1: { value: 1, short: "Nivå 1", label: "Nivå 1 · Barneskole", description: "Barneskole" },
+  2: { value: 2, short: "Nivå 2", label: "Nivå 2 · Ungdomsskole", description: "Ungdomsskole" },
+  3: { value: 3, short: "Nivå 3", label: "Nivå 3 · Videregående", description: "Videregående" },
+};
+const DEFAULT_DIFFICULTY = 2;
 
 // --- create client correctly from the CDN global ---
 // create client from global
@@ -83,6 +89,9 @@ const adminAssignmentsSection = document.getElementById("adminAssignmentsSection
 const adminAssignmentsList = document.getElementById("adminAssignmentsList");
 const unsplashChoicesContainer = document.getElementById("unsplashChoices");
 const unsplashChoicesStatus = document.getElementById("unsplashChoicesStatus");
+const taskDifficultySelect = document.getElementById("taskDifficulty");
+const assignmentDifficultyFilter = document.getElementById("assignmentDifficultyFilter");
+const assignmentSortSelect = document.getElementById("assignmentSortSelect");
 
 if (correctOptionInputs.length && !correctOptionInputs.some((input) => input.checked)) {
   correctOptionInputs[0].checked = true;
@@ -106,6 +115,8 @@ let currentAnswersEntries = [];
 let currentAnswersOppgaveMap = new Map();
 let currentAnswersStudentMap = new Map();
 let answersViewMode = "students";
+let assignmentDifficultyFilterValue = "all";
+let assignmentSortMode = "newest";
 
 // Bootstrap modal instance (so we can hide it programmatically)
 const loginModalEl = document.getElementById("loginModal");
@@ -179,6 +190,35 @@ function escapeHtml(value) {
 function sanitizeUrl(url) {
   if (typeof url !== "string") return "";
   return url.replace(/"/g, "").replace(/'/g, "");
+}
+
+function normalizeDifficulty(value) {
+  const parsed = Number(value);
+  if (parsed === 1 || parsed === 2 || parsed === 3) {
+    return parsed;
+  }
+  return DEFAULT_DIFFICULTY;
+}
+
+function getDifficultyMeta(value) {
+  const normalized = normalizeDifficulty(value);
+  return DIFFICULTY_LEVELS[normalized] || DIFFICULTY_LEVELS[DEFAULT_DIFFICULTY];
+}
+
+function formatDifficultyLabel(value, { short = false } = {}) {
+  const meta = getDifficultyMeta(value);
+  return short ? meta.short : meta.label;
+}
+
+function buildDifficultyOptions(selectedValue) {
+  const normalized = normalizeDifficulty(selectedValue);
+  return [1, 2, 3]
+    .map((level) => {
+      const meta = getDifficultyMeta(level);
+      const selected = normalized === level ? "selected" : "";
+      return `<option value="${level}" ${selected}>${meta.label}</option>`;
+    })
+    .join("");
 }
 
 function resetStudentUI() {
@@ -319,8 +359,7 @@ function updateSelectedAssignmentLabel() {
   if (!selectedAssignmentLabel) return;
   if (!selectedAssignmentId) {
     selectedAssignmentLabel.textContent = "Ingen oppgave valgt";
-    selectedAssignmentLabel.classList.remove("bg-primary", "text-white");
-    selectedAssignmentLabel.classList.add("bg-light", "text-dark");
+    selectedAssignmentLabel.classList.add("is-empty");
     if (assignmentDetailsPanel) assignmentDetailsPanel.classList.add("d-none");
     if (selectedAssignmentDetails) {
       selectedAssignmentDetails.textContent = "";
@@ -330,7 +369,8 @@ function updateSelectedAssignmentLabel() {
   if (assignmentDetailsPanel) assignmentDetailsPanel.classList.remove("d-none");
   const task = currentAssignments.find((item) => String(item.id) === String(selectedAssignmentId));
   if (task) {
-    selectedAssignmentLabel.textContent = `Valgt: ${task.tittel}`;
+    const difficultyMeta = getDifficultyMeta(task.difficulty);
+    selectedAssignmentLabel.textContent = `Valgt: ${task.tittel} (${difficultyMeta.short})`;
     if (selectedAssignmentDetails) {
       const content = parseTaskContent(task);
       const prompt = content.prompt || "Ingen beskrivelse.";
@@ -342,8 +382,7 @@ function updateSelectedAssignmentLabel() {
       selectedAssignmentDetails.textContent = "Oppgaven ble fjernet.";
     }
   }
-  selectedAssignmentLabel.classList.remove("bg-light", "text-dark");
-  selectedAssignmentLabel.classList.add("bg-primary", "text-white");
+  selectedAssignmentLabel.classList.remove("is-empty");
 }
 
 function getDisplayNameFromUser(user) {
@@ -789,7 +828,7 @@ async function loadAssignments() {
 
     const { data, error } = await supabaseClient
       .from("oppgaver")
-      .select("id, tittel, beskrivelse, created_at")
+      .select("id, tittel, beskrivelse, created_at, difficulty")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("loadAssignments error", error);
@@ -813,11 +852,17 @@ async function loadAssignments() {
 
 function renderAssignments() {
   if (!assignmentsList) return;
-  if (!currentAssignments.length) {
-    const completedAll = currentRole === "elev" && answeredAssignmentIds && answeredAssignmentIds.size;
-    assignmentsList.innerHTML = completedAll
-      ? '<div class="alert alert-success mb-0">Du har svart på alle tilgjengelige oppgaver.</div>'
-      : '<div class="alert alert-info mb-0">Ingen oppgaver er lagt ut ennå.</div>';
+  const filteredAssignments = applyAssignmentFilters(currentAssignments);
+  const hasAnyAssignments = currentAssignments.length > 0;
+  if (!filteredAssignments.length) {
+    const completedAll = currentRole === "elev" && answeredAssignmentIds && answeredAssignmentIds.size && !hasAnyAssignments;
+    if (!hasAnyAssignments) {
+      assignmentsList.innerHTML = completedAll
+        ? '<div class="alert alert-success mb-0">Du har svart på alle tilgjengelige oppgaver.</div>'
+        : '<div class="alert alert-info mb-0">Ingen oppgaver er lagt ut ennå.</div>';
+    } else {
+      assignmentsList.innerHTML = '<div class="alert alert-warning mb-0">Ingen oppgaver matcher valgte filtre. Endre filter eller sorter på nytt.</div>';
+    }
     if (submitAnswerBtn) submitAnswerBtn.disabled = true;
     renderAnswerOptions(null);
     selectedAssignmentId = null;
@@ -825,27 +870,40 @@ function renderAssignments() {
     return;
   }
 
-  const cardsHtml = currentAssignments
+  if (!selectedAssignmentId || !filteredAssignments.some((task) => String(task.id) === String(selectedAssignmentId))) {
+    selectedAssignmentId = String(filteredAssignments[0].id);
+  }
+
+  const cardsHtml = filteredAssignments
     .map((task) => {
       const content = parseTaskContent(task);
       const safeTitle = escapeHtml(task.tittel || "Untitled");
       const createdAt = task.created_at ? new Date(task.created_at).toLocaleDateString() : "";
       const imageUrl = content.imageUrl ? sanitizeUrl(content.imageUrl) : "";
       const hasImage = !!imageUrl;
+      const difficultyMeta = getDifficultyMeta(task.difficulty);
       const classes = ["assignment-card", hasImage ? "has-image" : "no-image"];
       if (String(task.id) === String(selectedAssignmentId)) {
         classes.push("selected");
       }
       const overlay = hasImage ? '<div class="assignment-card__overlay"></div>' : "";
       const style = hasImage ? `style="background-image:url('${imageUrl}')"` : "";
+      const difficultyBadge = `
+        <span class="assignment-card__difficulty assignment-card__difficulty--${difficultyMeta.value}" title="${escapeHtml(
+          difficultyMeta.description
+        )}">
+          ${escapeHtml(difficultyMeta.label)}
+        </span>
+      `;
       return `
         <article class="${classes.join(" ")}" data-assignment-id="${task.id}" ${style}>
           ${overlay}
           <div class="assignment-card__body">
-            <div class="d-flex justify-content-between align-items-center w-100">
-              <h6 class="mb-0">${safeTitle}</h6>
-              <small class="text-muted">${createdAt}</small>
+            <div class="assignment-card__meta">
+              ${difficultyBadge}
+              <small class="assignment-card__timestamp">${createdAt}</small>
             </div>
+            <h6 class="mb-0">${safeTitle}</h6>
           </div>
         </article>
       `;
@@ -856,6 +914,42 @@ function renderAssignments() {
   if (submitAnswerBtn) submitAnswerBtn.disabled = !selectedAssignmentId;
   updateSelectedAssignmentLabel();
   renderAnswerOptions(selectedAssignmentId);
+}
+
+function getAssignmentTimestamp(task) {
+  if (!task || !task.created_at) return 0;
+  const time = new Date(task.created_at).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function applyAssignmentFilters(assignments) {
+  if (!Array.isArray(assignments) || !assignments.length) return [];
+  let list = assignments.slice();
+
+  if (assignmentDifficultyFilterValue !== "all") {
+    const target = normalizeDifficulty(assignmentDifficultyFilterValue);
+    list = list.filter((task) => normalizeDifficulty(task.difficulty) === target);
+  }
+
+  const sortMode = assignmentSortMode || "newest";
+  list.sort((a, b) => {
+    if (sortMode === "oldest") {
+      return getAssignmentTimestamp(a) - getAssignmentTimestamp(b);
+    }
+    if (sortMode === "difficulty-asc") {
+      const diff = normalizeDifficulty(a.difficulty) - normalizeDifficulty(b.difficulty);
+      if (diff !== 0) return diff;
+      return getAssignmentTimestamp(b) - getAssignmentTimestamp(a);
+    }
+    if (sortMode === "difficulty-desc") {
+      const diff = normalizeDifficulty(b.difficulty) - normalizeDifficulty(a.difficulty);
+      if (diff !== 0) return diff;
+      return getAssignmentTimestamp(b) - getAssignmentTimestamp(a);
+    }
+    return getAssignmentTimestamp(b) - getAssignmentTimestamp(a);
+  });
+
+  return list;
 }
 
 function renderAdminAssignments() {
@@ -870,11 +964,24 @@ function renderAdminAssignments() {
       const safeTitle = escapeHtml(task.tittel || "Uten navn");
       const createdAt = task.created_at ? new Date(task.created_at).toLocaleString() : "";
       const taskIdAttr = escapeHtml(String(task.id));
+      const difficultyMeta = getDifficultyMeta(task.difficulty);
+      const selectId = `adminAssignmentDifficulty-${taskIdAttr}`;
       return `
         <div class="list-group-item d-flex justify-content-between align-items-center">
           <div>
             <div class="fw-semibold">${safeTitle}</div>
             <small class="text-muted">${createdAt}</small>
+            <div class="admin-assignment-meta mt-2">
+              <label class="form-label small mb-1" for="${selectId}">Vanskelighetsgrad</label>
+              <select
+                id="${selectId}"
+                class="form-select form-select-sm admin-difficulty-select"
+                data-assignment-id="${taskIdAttr}"
+                data-current="${difficultyMeta.value}"
+              >
+                ${buildDifficultyOptions(difficultyMeta.value)}
+              </select>
+            </div>
           </div>
           <button type="button" class="btn btn-outline-danger btn-sm admin-delete-assignment" data-assignment-id="${taskIdAttr}">
             Slett
@@ -896,7 +1003,7 @@ async function loadAdminAssignments() {
   try {
     const { data, error } = await supabaseClient
       .from("oppgaver")
-      .select("id, tittel, created_at")
+      .select("id, tittel, created_at, difficulty")
       .order("created_at", { ascending: false });
     if (error) {
       console.error("loadAdminAssignments error", error);
@@ -931,6 +1038,15 @@ if (adminAssignmentsList) {
     const assignmentId = deleteBtn.getAttribute("data-assignment-id");
     if (!assignmentId) return;
     deleteAssignmentById(assignmentId);
+  });
+
+  adminAssignmentsList.addEventListener("change", (event) => {
+    const select = event.target.closest(".admin-difficulty-select");
+    if (!select) return;
+    const assignmentId = select.getAttribute("data-assignment-id");
+    if (!assignmentId) return;
+    const newValue = Number(select.value || DEFAULT_DIFFICULTY);
+    updateAssignmentDifficulty(assignmentId, newValue, select);
   });
 }
 
@@ -1255,6 +1371,49 @@ async function deleteAssignmentById(assignmentId) {
   }
 }
 
+async function updateAssignmentDifficulty(assignmentId, newDifficulty, selectEl) {
+  if (!assignmentId) return;
+  if (currentRole !== "admin") {
+    window.alert("Kun administratorer kan endre vanskelighetsgrad.");
+    return;
+  }
+  const normalized = normalizeDifficulty(newDifficulty);
+  const originalValue = selectEl ? selectEl.getAttribute("data-current") || selectEl.value : null;
+  if (selectEl) {
+    selectEl.disabled = true;
+  }
+  try {
+    const { error } = await supabaseClient
+      .from("oppgaver")
+      .update({ difficulty: normalized })
+      .eq("id", assignmentId);
+    if (error) {
+      throw error;
+    }
+    adminAssignments = adminAssignments.map((task) =>
+      String(task.id) === String(assignmentId) ? { ...task, difficulty: normalized } : task
+    );
+    currentAssignments = currentAssignments.map((task) =>
+      String(task.id) === String(assignmentId) ? { ...task, difficulty: normalized } : task
+    );
+    if (selectEl) {
+      selectEl.dataset.current = String(normalized);
+      selectEl.value = String(normalized);
+    }
+    renderAssignments();
+  } catch (err) {
+    console.error("updateAssignmentDifficulty error", err);
+    window.alert("Kunne ikke oppdatere vanskelighetsgrad.");
+    if (selectEl && originalValue) {
+      selectEl.value = originalValue;
+    }
+  } finally {
+    if (selectEl) {
+      selectEl.disabled = false;
+    }
+  }
+}
+
 async function clearAllAnswers() {
   const confirmed = window.confirm("Dette sletter alle elevlogger. Er du sikker?");
   if (!confirmed) return;
@@ -1396,6 +1555,10 @@ if (createTaskForm) {
     const imageKeyword = taskImageKeywordInput && typeof taskImageKeywordInput.value === "string"
       ? taskImageKeywordInput.value.trim()
       : "";
+    const difficultyValue = taskDifficultySelect && typeof taskDifficultySelect.value === "string"
+      ? Number(taskDifficultySelect.value)
+      : DEFAULT_DIFFICULTY;
+    const normalizedDifficulty = normalizeDifficulty(difficultyValue);
     if (selectedUnsplashImage && selectedUnsplashImage.keyword !== imageKeyword) {
       selectedUnsplashImage = null;
     }
@@ -1458,6 +1621,7 @@ if (createTaskForm) {
       const payload = {
         tittel: title,
         beskrivelse: JSON.stringify(payloadContent),
+        difficulty: normalizedDifficulty,
       };
       const { error } = await supabaseClient.from("oppgaver").insert(payload);
       if (error) {
@@ -1468,6 +1632,7 @@ if (createTaskForm) {
 
       createTaskForm.reset();
       if (taskImageKeywordInput) taskImageKeywordInput.value = "";
+      if (taskDifficultySelect) taskDifficultySelect.value = String(DEFAULT_DIFFICULTY);
       clearUnsplashChoices({ clearKeyword: true, message: "Skriv inn et søkeord for å hente bilder." });
       correctOptionInputs.forEach((input, index) => {
         if (index === 0) {
@@ -1513,6 +1678,22 @@ if (answersViewSelect) {
   answersViewSelect.addEventListener("change", () => {
     answersViewMode = answersViewSelect.value || "students";
     renderAnswersView();
+  });
+}
+
+if (assignmentDifficultyFilter) {
+  assignmentDifficultyFilterValue = assignmentDifficultyFilter.value || "all";
+  assignmentDifficultyFilter.addEventListener("change", () => {
+    assignmentDifficultyFilterValue = assignmentDifficultyFilter.value || "all";
+    renderAssignments();
+  });
+}
+
+if (assignmentSortSelect) {
+  assignmentSortMode = assignmentSortSelect.value || "newest";
+  assignmentSortSelect.addEventListener("change", () => {
+    assignmentSortMode = assignmentSortSelect.value || "newest";
+    renderAssignments();
   });
 }
 

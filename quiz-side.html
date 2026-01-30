@@ -109,6 +109,26 @@
                 <h5>Velg en oppgave</h5>
                 <p class="student-panel__muted">Kortene under fylles av lærerne dine. Trykk på en for å lese mer.</p>
               </div>
+              <div class="student-panel__filters">
+                <div class="student-panel__filter-group">
+                  <label class="form-label small" for="assignmentDifficultyFilter">Nivå</label>
+                  <select id="assignmentDifficultyFilter" class="form-select form-select-sm">
+                    <option value="all" selected>Alle nivåer</option>
+                    <option value="1">Nivå 1 · Barneskole</option>
+                    <option value="2">Nivå 2 · Ungdomsskole</option>
+                    <option value="3">Nivå 3 · Videregående</option>
+                  </select>
+                </div>
+                <div class="student-panel__filter-group">
+                  <label class="form-label small" for="assignmentSortSelect">Sorter</label>
+                  <select id="assignmentSortSelect" class="form-select form-select-sm">
+                    <option value="newest" selected>Nyeste først</option>
+                    <option value="oldest">Eldste først</option>
+                    <option value="difficulty-asc">Laveste nivå</option>
+                    <option value="difficulty-desc">Høyeste nivå</option>
+                  </select>
+                </div>
+              </div>
               <div id="assignmentsList" class="student-panel__assignments-list"></div>
             </div>
 
@@ -172,6 +192,15 @@
                   <div class="form-text">Bilder hentes automatisk mens du skriver inn søkeordet.</div>
                   <div id="unsplashChoicesStatus" class="form-text mt-2"></div>
                   <div id="unsplashChoices" class="row g-2 mt-2"></div>
+                </div>
+                <div class="mb-3">
+                  <label class="form-label" for="taskDifficulty">Vanskelighetsgrad</label>
+                  <select id="taskDifficulty" class="form-select" required>
+                    <option value="1">Nivå 1 · Barneskole</option>
+                    <option value="2" selected>Nivå 2 · Ungdomsskole</option>
+                    <option value="3">Nivå 3 · Videregående</option>
+                  </select>
+                  <div class="form-text">1 = Barneskole, 2 = Ungdomsskole, 3 = Videregående.</div>
                 </div>
                 <div class="row g-3 mb-3" id="taskOptions">
                   <div class="col-12 col-md-6">
