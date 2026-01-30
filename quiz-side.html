@@ -88,28 +88,51 @@
     <main class="container py-4" id="rolePanels">
       <div id="roleHint" class="role-hint d-none"></div>
 
-      <section id="studentPanel" class="card shadow-sm d-none">
-        <div class="card-body">
-          <h5 class="card-title">Oppgaver</h5>
-          <p class="text-muted mb-3">Tilgjengelige oppgaver vises under. Send inn svaret ditt direkte her.</p>
-          <div id="assignmentsList" class="mb-3"></div>
+      <section id="studentPanel" class="student-panel card shadow-sm d-none">
+        <div class="student-panel__hero">
+          <div>
+            <p class="student-panel__eyebrow">Elevrommet</p>
+            <h2>Finn og lever oppgaver</h2>
+            <p class="student-panel__hero-text">Velg en oppgave, les detaljene og lever svaret ditt – alt på samme sted.</p>
+          </div>
+          <div class="student-panel__status">
+            <span class="student-panel__status-label">Valgt oppgave</span>
+            <div id="selectedAssignmentLabel" class="student-panel__status-pill">Ingen oppgave valgt</div>
+          </div>
+        </div>
 
-          <form id="answerForm" class="needs-validation" novalidate>
-            <div class="mb-2">
-              <div id="selectedAssignmentLabel" class="badge bg-light text-dark mt-2">Ingen oppgave valgt</div>
-              <div id="assignmentDetailsPanel" class="assignment-details-panel mt-3 d-none">
+        <div class="student-panel__content">
+          <div class="student-panel__grid">
+            <div class="student-panel__assignments">
+              <div class="student-panel__section-header">
+                <p class="student-panel__eyebrow">Tilgjengelige</p>
+                <h5>Velg en oppgave</h5>
+                <p class="student-panel__muted">Kortene under fylles av lærerne dine. Trykk på en for å lese mer.</p>
+              </div>
+              <div id="assignmentsList" class="student-panel__assignments-list"></div>
+            </div>
+
+            <form id="answerForm" class="student-panel__form needs-validation" novalidate>
+              <div class="student-panel__section-header">
+                <p class="student-panel__eyebrow">Svar</p>
+                <h5>Lever besvarelsen</h5>
+                <p class="student-panel__muted">Alternativer og detaljer dukker opp når du har valgt en oppgave.</p>
+              </div>
+
+              <div id="assignmentDetailsPanel" class="assignment-details-panel d-none">
                 <div class="assignment-details-header">Oppgavetekst</div>
                 <div id="selectedAssignmentDetails" class="assignment-details-body"></div>
               </div>
-            </div>
-            <div class="mb-3">
-              <label class="form-label">Alternativer</label>
-              <div id="answerOptions" class="list-group"></div>
-              <div class="form-text">Velg ett alternativ før du sender inn.</div>
-            </div>
-            <button id="submitAnswerBtn" class="btn btn-primary">Send inn svar</button>
-            <div id="answerFeedback" class="form-text mt-2"></div>
-          </form>
+
+              <div class="mb-3">
+                <label class="form-label">Alternativer</label>
+                <div id="answerOptions" class="list-group"></div>
+                <div class="form-text">Velg ett alternativ før du sender inn.</div>
+              </div>
+              <button id="submitAnswerBtn" class="btn btn-primary w-100">Send inn svar</button>
+              <div id="answerFeedback" class="form-text mt-3"></div>
+            </form>
+          </div>
         </div>
       </section>
 
