@@ -26,7 +26,24 @@
 				</p>
 				<div class="landing-actions">
 					<a id="enterQuizBtn" href="quiz-side.html" class="btn btn-primary btn-lg">Start quiz</a>
-					<a href="#info" class="btn btn-link text-light">Hvordan fungerer det?</a>
+					<button
+						id="howItWorksBtn"
+						type="button"
+						class="btn btn-link text-light"
+						aria-expanded="false"
+						aria-controls="howItWorksInfo"
+					>
+						Hvordan fungerer det?
+					</button>
+				</div>
+				<div id="howItWorksInfo" class="how-it-works" aria-hidden="true">
+					<p class="how-it-works__intro">Slik kommer du i gang på under ett minutt:</p>
+					<ol class="how-it-works__list">
+						<li>Logg inn med din stud.akademiet.no-konto for å se hvilke oppgaver som ligger klare.</li>
+						<li>Velg en oppgave og les teksten. Alt vises direkte i portalen på både mobil og PC.</li>
+						<li>Svar på alternativer og lever – læreren får resultatet live og kan gi deg tilbakemelding.</li>
+					</ol>
+					<p class="small text-white-50 mb-0">Ingen ekstra apper eller nedlastinger. Bare åpne nettleseren og sett i gang.</p>
 				</div>
 			</div>
 		</header>
@@ -97,6 +114,19 @@
 				btn.addEventListener("keyup", (event) => {
 					if (event.key === "Enter" || event.key === " ") {
 						navigateToPortal(false);
+					}
+				});
+			}
+
+			const howItWorksBtn = document.getElementById("howItWorksBtn");
+			const howItWorksInfo = document.getElementById("howItWorksInfo");
+			if (howItWorksBtn && howItWorksInfo) {
+				howItWorksBtn.addEventListener("click", () => {
+					const isVisible = howItWorksInfo.classList.toggle("is-visible");
+					howItWorksBtn.setAttribute("aria-expanded", String(isVisible));
+					howItWorksInfo.setAttribute("aria-hidden", String(!isVisible));
+					if (isVisible) {
+						howItWorksInfo.scrollIntoView({ behavior: "smooth", block: "start" });
 					}
 				});
 			}
